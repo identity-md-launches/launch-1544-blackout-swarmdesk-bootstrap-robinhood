@@ -185,12 +185,89 @@ the M-2 pointer in M1 and M4, and timing (1-contract median about 63 min; 8-cont
 **Open items (v3.12):**
 1. `foundry.toml`: apply `via_ir = false` and `bytecode_hash = "none"` in a job where the file may be edited.
    The launch pins above stay valid (they are the override build). After the change, the via-IR repo pins can
-   only be dropped together with a re-pin (see 2).
+   only be dropped together with a re-pin (see 2). **Done by the requester (commits 94d5371, e0c09d4) and
+   re-pinned in v3.13 below.**
 2. Run the IMD public check for M1, M2, M3, M4 and M7 against the delivered commit and record the blockers.
 3. Research 4e478378 was not in this workspace. Compare the objective texts in `launch-v39.md` with its
    recommended texts before pasting.
 4. Still open from v3.11: the requester inputs (snapshot, roots, keeper wallet, Ethereum IMD), the plane's
    admission on the live path, and launch-day gas.
+
+## v3.13 HeartbeatBps wired and re-pinned (review finding 6d1287b0)
+
+Source only. No deployment, broadcast, token action or oracle purchase. Decision taken: option (a), fix it in
+this job, since nothing is on chain and re-pinning is free.
+
+**1. The fix.** `FeeRouter._route` and `routeTokens` credit `Params.HeartbeatBps` (packed regulator key 41,
+bounds 200–5000, 200 at launch) instead of a literal 200 bps, through the new view `HEARTBEAT_BPS()`. The 1 ETH
+cap (`HeartbeatCap`), the 10% team share, the 50% pot share and the `executeSells` rules are unchanged; the
+remainder of each split goes to reward buys as before, so a raised heartbeat share comes out of reward buys
+only. One guard was added: with the pot enabled, team and pot take 60% first, so a heartbeat share above 40%
+is clipped to what is left instead of underflowing (only reachable above 4000 bps, which takes 34 daily
+regulator steps). At 200 bps every existing split test is byte-for-byte the same.
+
+**2. Tests** (`forge test`: 273 passed, 0 failed, 6 skipped as before, 48 suites, `artifacts/v313/forge-test.txt`):
+- `test/HeartbeatBpsV313.t.sol`: default split unchanged; swarm-set 220 bps credits 0.022 ETH of a 1 ETH
+  surcharge and 0.022e18 of 1e18 routed tokens with team and pot unmoved; the raised share still stops at the
+  1 ETH cap and routed tokens carry no heartbeat at the cap; walking back to the 200 floor and refusing 199;
+  5000 bps with the pot on is clipped to 0.4 ETH and rewards get 0 (tokens: 0.5 / 0.1 / 0.4); fuzzed
+  conservation of every wei for any share and amount with team and pot exact; non-swarm, >10% step, above
+  ceiling and second step inside 24 hours all revert.
+- `SwarmDeskV37Test.testDeskSetHeartbeatBpsMovesFeeRouterShare`: a Desk-executed regulator vector carrying
+  packed key 41 → 220 sets the value, then the FeeRouter credits 0.022 ETH and 0.022e18 tokens.
+- `V310` and `Registry` pin tests now assert one toolchain (see 3).
+
+**3. Re-pin, launch profile = `foundry.toml`.** The requester's commits 94d5371 and e0c09d4 set `via_ir = false`
+and `bytecode_hash = "none"` in `foundry.toml`, which closed v3.12 open item 1. The repository build and the
+launch build are therefore one toolchain and `tools/pin_module_code.py` / `pin_swarm_code.py` write the same
+hash into both pins of every role (`launchHash == repoHash`, `*_LAUNCH == *_REPO`). The two-pin structure is
+kept because the tools, the registry views and the escrow accept it unchanged; the launch overrides are no-ops.
+New creation-code hashes (solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none;
+`artifacts/v313/launch-creation-hashes.txt`, `module-pins.txt`):
+
+| Contract | Creation hash (v3.13) | Was (v3.12) |
+|---|---|---|
+| FeeRouter (`ModuleCode.launchHash(6)`) | `0x47dc548c7cf7f4f190a5edaf16e1c7a0233492ed470e03afa80426417e7c0bda` | `0xfdc39970…8093ae` |
+| GameRegistry (`SwarmCode.REGISTRY_LAUNCH`) | `0xedcb22640cb6434636d72a457d6557987e40dbfcd8dcea4355ab7d525cef2b22` | `0xee08039e…8418cb` |
+| Params (`SwarmCode.PARAMS_LAUNCH`) | `0x26c9f36af040b02eba9644f52daeed84fae4e42eab9bdb23277d0bb28c6dc6c0` | unchanged |
+| SwarmDesk | `0x65968358bcf87aa8839b8bce6b2d339493deac3f77d75a3ff0b3ad4f35955745` | `0x9e0cf571…deda214` |
+| EndowmentEscrow | `0x4a39e28d9eb7fc03582b549a2022859f7586ce9bcb4f1ab3712f0329d0502ef3` | `0xeeb7a2c1…491610` |
+| V4Market (`src/` and flattened `launch/V4Market.sol`) | `0x4610352776e29437b7b1acf74fdd11c85ff3cb3d79135c75ddb702edcb391392` | `0x758e2ab5…e3a974` |
+| `ModuleCode.launchHash(0..5, 7..13)` | unchanged | unchanged |
+
+Why each moved: FeeRouter is the source change; GameRegistry inlines `ModuleCode`; SwarmDesk and
+EndowmentEscrow inline `SwarmCode.REGISTRY_LAUNCH`; V4Market embeds `type(GameRegistry).creationCode`. Params
+inlines none of them. `launch/V4Market.sol` was re-flattened (`forge flatten`) and compiled on its own in a
+scratch project: its creation hash equals the `src/` build above. The twelve SwarmDesk constructor words
+(`tools/swarm_constructor_args.mjs` over `docs/oracle-v37/oracle-config.json`) contain no code pin and stay as
+given. `pin_module_code.py --check` and `pin_swarm_code.py --check` pass; every runtime fits EIP-170.
+
+**4. Reserved Params keys.** [docs/params-keys-v313.md](docs/params-keys-v313.md) lists every key with its
+reader. Seventeen keys have none and are documented as reserved (no effect): 3 PriceFloor, 4 PriceCeiling,
+5 PriceStart, 7 PriceDecayBps, 8 RepairBps, 9 LobbyKBps, 10 LobbyMinWeight, 24 SellHourBps, 25 SellDayBps,
+26 SellDeviationBps, 28 ExpansionPrice, 29 MergePrice, 30 OverclockPrice, 33 MeasureBounty, 34 CreditBounty,
+35 AuditBounty, 38 SeasonScoreBounty. None is wired here: each needs a design decision no brief has made, and
+removing them would move the Params pin and the key numbering of every regulator body.
+
+**Reported: the committed regulator vector proposes one reader-less key.** `docs/oracle-v37/regulator.json`
+proposes `(8, 250)`, index 8 = `RepairBps`, which nothing reads. It is harmless as committed (250 is the
+default, so `SwarmDesk._regulate` skips it; any other value would only burn that key's 24-hour cooldown) and it
+is **not** changed here, because the body hash and question hash are `oracle-config.json` `bodies[1]` /
+`questions[1]`, two of the twelve constructor words this job keeps. Removing it is a re-cut of the regulator
+body in a job that also re-cuts the M1 objective. The other seven proposals (0, 1, 31, 23, 40, 27, 44) all
+have readers, 40 since this version.
+
+**5. Checks** (`artifacts/v313/`): `forge build`; `forge test` 273 passed / 0 failed / 6 skipped (the 5
+fork-rehearsal tests and the optional live-RPC test, offline); `forge fmt --check` clean; both pin checks;
+`tools/check_v37_authority.py`; `node test/oracle-v37.test.mjs`; `python3 -m unittest discover -s test/python`
+34 passed. The fork rehearsal was not re-run (no network in this job); the pinned-hash path it proved is
+unchanged in shape, only the five values above moved.
+
+**Operational responsibilities (v3.13).** The regulator may now move the heartbeat share: 10% per 24 hours
+within 200–5000 bps, with a public letter; every basis point above 200 is taken from reward buys, never from
+the team or the pot. The keeper budget in `regulator.md` ("incremental share comes from reward buys") is now
+true in code. Before each paid launch step compare the attested creation-code hash with the v3.13 table above,
+not the v3.12 one.
 
 ## Still open
 

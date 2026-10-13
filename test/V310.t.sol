@@ -57,13 +57,21 @@ contract ToolchainPinsV310Test is Test {
         }
     }
 
-    function testPinsAreDistinctPerToolchainAndRejectUnknownCode() public pure {
-        assertTrue(SwarmCode.REGISTRY_LAUNCH != SwarmCode.REGISTRY_REPO);
-        assertTrue(SwarmCode.PARAMS_LAUNCH != SwarmCode.PARAMS_REPO);
+    /// @dev v3.13: foundry.toml is now the launch profile itself (via_ir false, bytecode_hash none), so the
+    /// repository build and the launch build are one toolchain and both pins of every role are the same hash.
+    function testPinsAreOneToolchainAndRejectUnknownCode() public pure {
+        assertEq(SwarmCode.REGISTRY_LAUNCH, SwarmCode.REGISTRY_REPO, "one toolchain since v3.13");
+        assertEq(SwarmCode.PARAMS_LAUNCH, SwarmCode.PARAMS_REPO, "one toolchain since v3.13");
+        assertEq(
+            keccak256(type(GameRegistry).creationCode), SwarmCode.REGISTRY_LAUNCH, "this build is the launch build"
+        );
+        assertEq(keccak256(type(Params).creationCode), SwarmCode.PARAMS_LAUNCH, "this build is the launch build");
         assertFalse(SwarmCode.isRegistry(keccak256(hex"ff")));
         assertFalse(SwarmCode.isParams(SwarmCode.REGISTRY_LAUNCH));
+        bytes[14] memory c = _codes();
         for (uint256 role; role < 14; ++role) {
-            assertTrue(ModuleCode.launchHash(role) != ModuleCode.repoHash(role));
+            assertEq(ModuleCode.launchHash(role), ModuleCode.repoHash(role), "one toolchain since v3.13");
+            assertEq(keccak256(c[role]), ModuleCode.launchHash(role), "this build is the launch build");
             assertFalse(ModuleCode.matches(role, bytes32(0)));
         }
         assertFalse(ModuleCode.matches(14, ModuleCode.launchHash(0)));

@@ -599,6 +599,33 @@ contract SwarmDeskV37Test is BaseTest {
         assertFalse(desk.consumed(a.requestId));
     }
 
+    /// @dev v3.13 (review finding 6d1287b0): a Desk-executed regulator vector raising HeartbeatBps (packed key 41)
+    /// to 220 moves the FeeRouter heartbeat share: 0.022 ETH of a 1 ETH surcharge and 0.022e18 of routed tokens.
+    function testDeskSetHeartbeatBpsMovesFeeRouterShare() public {
+        vm.deal(address(market), 10 ether);
+        vm.warp(block.timestamp + 2 days);
+        bytes32[] memory v = regulatorValues();
+        v[1] = bytes32((uint256(41) << 248) | uint256(220));
+        OracleAttestation.Attestation memory a = attestation(1, v);
+        receiveAnswer(a);
+        desk.execute(1, a.answer);
+        assertEq(d.params.get(Params.Key.HeartbeatBps), 220, "Desk set 220 bps");
+        assertEq(d.fees.HEARTBEAT_BPS(), 220);
+        assertFalse(d.fees.potEnabled(), "launch-core fixture: pot disabled");
+        vm.prank(address(market));
+        d.fees.depositSellTax{value: 1 ether}();
+        assertEq(d.fees.heartbeatBalance(), 0.022 ether, "2.2% heartbeat of a 1 ETH surcharge");
+        assertEq(d.fees.credit(team), 0.1 ether, "team share unchanged");
+        assertEq(d.fees.rewardETH(), 0.878 ether, "remainder to rewards");
+        uint256 poolBefore = token.balanceOf(address(d.pool));
+        token.transfer(address(d.fees), 1 ether);
+        vm.prank(address(d.packs));
+        d.fees.routeTokens(1 ether);
+        assertEq(d.fees.heartbeatTokens(), 0.022 ether, "2.2% heartbeat of routed tokens");
+        assertEq(d.fees.teamTokens(), 0.1 ether);
+        assertEq(token.balanceOf(address(d.pool)) - poolBefore, 0.878 ether);
+    }
+
     function testFuzzEveryParamHardBoundsAndTenPercentStep(uint8 rawKey, uint248 target) public {
         uint256 key = bound(rawKey, 0, 44);
         vm.warp(block.timestamp + 2 days);

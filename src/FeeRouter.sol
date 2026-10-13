@@ -36,6 +36,12 @@ contract FeeRouter is GameModule, ReentrancyGuard {
         return params().get(Params.Key.HeartbeatCap);
     }
 
+    /// @notice v3.13: the heartbeat share of the sell surcharge and of routed tokens is the regulator's
+    /// Params.HeartbeatBps (200–5000, 200 at launch), no longer a literal 200. The 1 ETH cap is unchanged.
+    function HEARTBEAT_BPS() public view returns (uint256) {
+        return params().get(Params.Key.HeartbeatBps);
+    }
+
     uint256 public rewardETH;
     uint256 public heartbeatBalance;
     uint256 public lastBuy;
@@ -132,19 +138,23 @@ contract FeeRouter is GameModule, ReentrancyGuard {
         return civic != address(0) && IFeatureFlags(civic).enabled(6);
     }
 
-    /// @dev Sell surcharge: 50% season pot (when enabled), 38% reward buys, 10% team, 2% capped heartbeat.
+    /// @dev Sell surcharge: 50% season pot (when enabled), 10% team, HeartbeatBps capped heartbeat (2% at launch),
+    /// the remainder to reward buys. The team and pot shares never move; a raised heartbeat share comes out of
+    /// reward buys only, and above 40% with the pot enabled it is clipped to what is left so rewards never underflow.
     function _route(uint8 stream) private {
         if (msg.value == 0) revert InvalidValue();
         uint256 t = msg.value * TEAM_BPS / 10000;
-        uint256 h = msg.value * 200 / 10000;
+        uint256 pot = stream == 3 && potEnabled() ? msg.value / 2 : 0;
+        uint256 h = msg.value * HEARTBEAT_BPS() / 10000;
         uint256 cap = HEARTBEAT_CAP();
         uint256 room = cap > heartbeatBalance ? cap - heartbeatBalance : 0;
         if (h > room) h = room;
+        uint256 left = msg.value - t - pot;
+        if (h > left) h = left;
         credit[team] += t;
         heartbeatBalance += h;
-        uint256 pot = stream == 3 && potEnabled() ? msg.value / 2 : 0;
         potETH += pot;
-        rewardETH += msg.value - t - h - pot;
+        rewardETH += left - h;
         emit Routed(stream, msg.value);
     }
 
@@ -154,7 +164,7 @@ contract FeeRouter is GameModule, ReentrancyGuard {
             revert InvalidValue();
         }
         uint256 t = amount / 10;
-        uint256 h = heartbeatBalance < HEARTBEAT_CAP() ? amount * 200 / 10000 : 0;
+        uint256 h = heartbeatBalance < HEARTBEAT_CAP() ? amount * HEARTBEAT_BPS() / 10000 : 0;
         uint256 reward = amount - t - h;
         teamTokens += t;
         heartbeatTokens += h;

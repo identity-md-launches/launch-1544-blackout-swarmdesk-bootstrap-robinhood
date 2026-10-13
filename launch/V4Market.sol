@@ -162,42 +162,16 @@ library Address {
 
 // src/lib/Errors.sol
 
-library Unauthorized_0 {
-    error Unauthorized();
-}
-
-library InvalidAddress_0 {
-    error InvalidAddress();
-}
-
-library InvalidValue_0 {
-    error InvalidValue();
-}
-
-library TooEarly_0 {
-    error TooEarly();
-}
-
-library AlreadyDone_0 {
-    error AlreadyDone();
-}
-
-library NotConfigured_0 {
-    error NotConfigured();
-}
+error Unauthorized();
+error InvalidAddress();
+error InvalidValue();
+error TooEarly();
+error AlreadyDone();
+error NotConfigured();
 error CatchUpRequired();
-
-library InsufficientBalance_0 {
-    error InsufficientBalance();
-}
-
-library InvalidProof_0 {
-    error InvalidProof();
-}
-
-library TransferFailed_0 {
-    error TransferFailed();
-}
+error InsufficientBalance();
+error InvalidProof();
+error TransferFailed();
 error FeatureDisabled();
 
 // vendor/openzeppelin/contracts/token/ERC20/IERC20.sol
@@ -840,7 +814,7 @@ library ModuleCode {
         if (role == 3) return 0x98f7224201d9e7e3d16bd8996c29a522cac5bd1b375181de8cfdc2c6b9639e76; // FarmItems
         if (role == 4) return 0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737a; // PackSale
         if (role == 5) return 0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90; // StarterClaim
-        if (role == 6) return 0xfdc39970a49f3a789e7730eff691f5db751ee069018a70b2b12b6d96728093ae; // FeeRouter
+        if (role == 6) return 0x47dc548c7cf7f4f190a5edaf16e1c7a0233492ed470e03afa80426417e7c0bda; // FeeRouter
         if (role == 7) return 0xf21418187e35f2785dfd16075ad4b1bf855552ac4b413592f29d7222777974e9; // GridOperator
         if (role == 8) return 0x472bc80e8b219eccf53f64d20bfce303db094b2301904442e51228d076b596fa; // Season
         if (role == 9) return 0x48a9f8dd8c707a2a8c6b4a1838640be765a3e3c9d2306680bda5ce679b6dbe7c; // FarmEngine
@@ -852,20 +826,20 @@ library ModuleCode {
     }
 
     function repoHash(uint256 role) internal pure returns (bytes32) {
-        if (role == 0) return 0x8675c60221662e8db37fa622357ef6138f3c7b4a08ef9b321349c8df85faf02c; // RewardPool
-        if (role == 1) return 0x420acacac1dfcf2a181fe8b42ea9f2fa834bec68296e0163a91439cbbf936645; // FarmRewards
-        if (role == 2) return 0x12f7e45a32253e5acdd337dbe2562f6bd235bb7a90816fd95a22261540e71f58; // FarmCore
-        if (role == 3) return 0x77623dcedd88a9d354baa2369ec1f7828b4fdc5de733a8aabe2c7216eec39af9; // FarmItems
-        if (role == 4) return 0xd3408bf7ad0efc741b45028339b7127a9300ae9a97cea61622b6625a61e95c67; // PackSale
-        if (role == 5) return 0x2dfe64e86599c6ead643841958dd8edc4115078031855fb3d0f0f33316899176; // StarterClaim
-        if (role == 6) return 0x13193c459706eb293f8614d0db137a6582b26fb2aa22518339343b00b7e1f190; // FeeRouter
-        if (role == 7) return 0x468d2797b48460cd98bef7c0bdc38605ea6f489deed1e35bdc2cb0a57a19b407; // GridOperator
-        if (role == 8) return 0x32c3e13fba1a54c0448a1bd29028ecd0a89b2f52e0c4b04a1d380083f3729632; // Season
-        if (role == 9) return 0xc6f8b03a4dab986ecc68e30fd6d0a22a1c9806e18b76e2dac836b947c5b4a650; // FarmEngine
-        if (role == 10) return 0x9258bc62008c656fe0c1c0c0ec5c83bf539ce90cb5fe74a037b8a21471d61324; // Economy
-        if (role == 11) return 0xeb151ce965501ef1e60906381959f604548fec2a2ca65c25ff1a2850daf83b8a; // Enhancement
-        if (role == 12) return 0x6a9c5fcabab53437b8f8c85c68268f4fdd7bde8d88f581b23a1db8b67b6904cd; // Civic
-        if (role == 13) return 0xa5ae208934b98d8c5db7dc77ecf721ed52f9dca43513b3d30a14a3598c7f58d6; // Billboards
+        if (role == 0) return 0xecf3ae5ebb791318703b5e79960cfd243b7d89bdffa0e0501bee5146623764de; // RewardPool
+        if (role == 1) return 0xed642b752e9c5072b53c235da6639bee5602e96b122f972a15445ac239b3ec22; // FarmRewards
+        if (role == 2) return 0xcea843ff5065bd750f2ff6d6e80f587c9ae149a67b5f39e1b49345ecf8f8ec04; // FarmCore
+        if (role == 3) return 0x98f7224201d9e7e3d16bd8996c29a522cac5bd1b375181de8cfdc2c6b9639e76; // FarmItems
+        if (role == 4) return 0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737a; // PackSale
+        if (role == 5) return 0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90; // StarterClaim
+        if (role == 6) return 0x47dc548c7cf7f4f190a5edaf16e1c7a0233492ed470e03afa80426417e7c0bda; // FeeRouter
+        if (role == 7) return 0xf21418187e35f2785dfd16075ad4b1bf855552ac4b413592f29d7222777974e9; // GridOperator
+        if (role == 8) return 0x472bc80e8b219eccf53f64d20bfce303db094b2301904442e51228d076b596fa; // Season
+        if (role == 9) return 0x48a9f8dd8c707a2a8c6b4a1838640be765a3e3c9d2306680bda5ce679b6dbe7c; // FarmEngine
+        if (role == 10) return 0xf6b92b7b46ea28c6c7828d8edb515a8009bc64afc11158c13bdcf0b7881e05b7; // Economy
+        if (role == 11) return 0x19ff379fb18f8649bc3889c3f8981bcf40d7c4045fe066dde9014b55b9751689; // Enhancement
+        if (role == 12) return 0xb3e89ec00b8ad51904cdac336644a6025ceea25c15fa931cac2ad13d89dc0bb2; // Civic
+        if (role == 13) return 0x3cb8b542f7baa025b6db7f2a4864288a594d05e75b9b4e9ec66416c1fe52aa60; // Billboards
         return bytes32(0);
     }
 
@@ -1017,9 +991,9 @@ contract Params {
     event ParamChanged(Key indexed key, uint256 oldValue, uint256 newValue, string letter);
 
     constructor(address swarm_, uint256 heartbeatBps_, uint256 heartbeatCap_) {
-        if (swarm_ == address(0)) revert InvalidAddress_0.InvalidAddress();
-        if (heartbeatBps_ < 200 || heartbeatBps_ > 5000) revert InvalidValue_0.InvalidValue();
-        if (heartbeatCap_ != 1 ether) revert InvalidValue_0.InvalidValue();
+        if (swarm_ == address(0)) revert InvalidAddress();
+        if (heartbeatBps_ < 200 || heartbeatBps_ > 5000) revert InvalidValue();
+        if (heartbeatCap_ != 1 ether) revert InvalidValue();
         swarmWallet = swarm_;
         uint256[45] memory defaults = [
             uint256(350),
@@ -1123,7 +1097,7 @@ contract Params {
     }
 
     function set(Key k, uint256 next, string calldata letter) external {
-        if (msg.sender != swarmWallet) revert Unauthorized_0.Unauthorized();
+        if (msg.sender != swarmWallet) revert Unauthorized();
         (uint256 lo, uint256 hi) = bounds(k);
         uint256 old = get[k];
         uint256 delta = next > old ? next - old : old - next;
@@ -1131,9 +1105,9 @@ contract Params {
             next < lo || next > hi || delta == 0 || delta > old / 10 || bytes(letter).length == 0
                 || bytes(letter).length > 1024
         ) {
-            revert InvalidValue_0.InvalidValue();
+            revert InvalidValue();
         }
-        if (block.timestamp < lastChanged[k] + 1 days) revert TooEarly_0.TooEarly();
+        if (block.timestamp < lastChanged[k] + 1 days) revert TooEarly();
         get[k] = next;
         lastChanged[k] = block.timestamp;
         emit ParamChanged(k, old, next, letter);
@@ -1293,7 +1267,7 @@ contract GameRegistry is IGameRegistry {
         if (
             token_ == address(0) || params_ == address(0) || market_ == address(0) || factory_ == address(0)
                 || freeRoot_ == bytes32(0) || root_ == bytes32(0) || snapshot_ == 0 || endowment_ > 250_000_000 ether
-        ) revert InvalidValue_0.InvalidValue();
+        ) revert InvalidValue();
         token = token_;
         params = params_;
         market = market_;
@@ -1306,13 +1280,13 @@ contract GameRegistry is IGameRegistry {
 
     function launchTime() external view returns (uint256) {
         uint256 t = ILaunchHook(market).initializedAt();
-        if (t == 0) revert NotConfigured_0.NotConfigured();
+        if (t == 0) revert NotConfigured();
         return t;
     }
 
     function module(uint256 role) external view returns (address result) {
         result = modules[role];
-        if (result == address(0)) revert NotConfigured_0.NotConfigured();
+        if (result == address(0)) revert NotConfigured();
     }
 
     function registeredModule(uint256 role) external view returns (address) {
@@ -1321,13 +1295,13 @@ contract GameRegistry is IGameRegistry {
 
     /// @notice The launch toolchain's pin (IMD verifier settings) for a role.
     function creationCodeHash(uint256 role) external pure returns (bytes32) {
-        if (role >= 14) revert InvalidValue_0.InvalidValue();
+        if (role >= 14) revert InvalidValue();
         return ModuleCode.launchHash(role);
     }
 
     /// @notice Both pins for a role: the launch toolchain's and the repository toolchain's.
     function creationCodeHashes(uint256 role) external pure returns (bytes32 launch, bytes32 repo) {
-        if (role >= 14) revert InvalidValue_0.InvalidValue();
+        if (role >= 14) revert InvalidValue();
         return (ModuleCode.launchHash(role), ModuleCode.repoHash(role));
     }
 
@@ -1341,11 +1315,11 @@ contract GameRegistry is IGameRegistry {
         returns (address deployed)
     {
         if (role >= 14 || index >= 8 || launchNumber == 0 || !ModuleCode.matches(role, keccak256(creationCode))) {
-            revert InvalidValue_0.InvalidValue();
+            revert InvalidValue();
         }
-        if (modules[role] != address(0)) revert AlreadyDone_0.AlreadyDone();
+        if (modules[role] != address(0)) revert AlreadyDone();
         deployed = factory.predictContract(launchNumber, index, bytes.concat(creationCode, abi.encode(address(this))));
-        if (deployed.code.length == 0) revert NotConfigured_0.NotConfigured();
+        if (deployed.code.length == 0) revert NotConfigured();
         modules[role] = deployed;
         registered++;
         emit Registered(role, deployed, launchNumber, index);
@@ -1459,7 +1433,7 @@ contract V4Market is ReentrancyGuard {
         if (
             gameConfigHash_ == bytes32(0) || launcher_ == address(0) || factory_ == address(0) || manager_ == address(0)
                 || token_ == address(0) || desk_ == address(0) || spacing_ <= 0 || spacing_ > 32767 || fee_ != POOL_FEE
-        ) revert InvalidValue_0.InvalidValue();
+        ) revert InvalidValue();
         gameConfigHash = gameConfigHash_;
         launcher = launcher_;
         applicationFactory = IApplicationFactory(factory_);
@@ -1478,29 +1452,29 @@ contract V4Market is ReentrancyGuard {
     /// Params of the registry the Desk bound to (the Desk proved that Params against pinned code and the
     /// factory), Params must point at the Desk, and in the strict path the Desk must have bound to it.
     function bindFeeRouter(address router, uint64 registryLaunch, uint256 registryIndex) external nonReentrant {
-        if (address(fees) != address(0)) revert AlreadyDone_0.AlreadyDone();
-        if (router.code.length == 0) revert InvalidAddress_0.InvalidAddress();
-        if (registryLaunch == 0 || registryIndex >= 8) revert InvalidValue_0.InvalidValue();
+        if (address(fees) != address(0)) revert AlreadyDone();
+        if (router.code.length == 0) revert InvalidAddress();
+        if (registryLaunch == 0 || registryIndex >= 8) revert InvalidValue();
         IHookRouter candidate = IHookRouter(router);
         GameRegistry r = GameRegistry(candidate.registry());
         if (
             address(r.factory()) != address(applicationFactory) || r.token() != token || !_routerMarketValid(r.market())
-        ) revert InvalidValue_0.InvalidValue();
+        ) revert InvalidValue();
         if (keccak256(abi.encode(r.starterRoot(), r.freeRoot(), r.snapshotBlock(), r.endowment())) != gameConfigHash) {
-            revert InvalidProof_0.InvalidProof();
+            revert InvalidProof();
         }
         address p = r.params();
         _checkDesk(p);
         if (applicationFactory.predictContract(registryLaunch, registryIndex, _registryInitCode(r, p)) != address(r)) {
-            revert InvalidProof_0.InvalidProof();
+            revert InvalidProof();
         }
-        if (!_canonical(r)) revert InvalidProof_0.InvalidProof();
+        if (!_canonical(r)) revert InvalidProof();
         // Enrollment proves exact FeeRouter initcode (including registry) and its factory CREATE2 address.
         if (
             r.module(6) != router || candidate.token() != token || candidate.market() != r.market()
                 || candidate.params() != p
         ) {
-            revert InvalidValue_0.InvalidValue();
+            revert InvalidValue();
         }
         fees = candidate;
         params = IHookParams(p);
@@ -1511,7 +1485,7 @@ contract V4Market is ReentrancyGuard {
     function _checkDesk(address p) private view {
         address bound = IHookDesk(desk).registry();
         if (bound == address(0) || GameRegistry(bound).params() != p || Params(p).swarmWallet() != desk) {
-            revert InvalidProof_0.InvalidProof();
+            revert InvalidProof();
         }
     }
 
@@ -1537,11 +1511,11 @@ contract V4Market is ReentrancyGuard {
 
     /// @notice Permissionless forwarding, kept separate so a receiver cannot interrupt pool swaps.
     function flushFees() external nonReentrant {
-        if (address(fees) == address(0)) revert NotConfigured_0.NotConfigured();
+        if (address(fees) == address(0)) revert NotConfigured();
         uint256 base = heldBase;
         uint256 excess = heldSellTax;
         uint256 launchTax = heldLaunchTax;
-        if (base + excess + launchTax == 0) revert InsufficientBalance_0.InsufficientBalance();
+        if (base + excess + launchTax == 0) revert InsufficientBalance();
         heldBase = 0;
         heldSellTax = 0;
         heldLaunchTax = 0;
@@ -1561,7 +1535,7 @@ contract V4Market is ReentrancyGuard {
     }
 
     function _validateHookAddress() internal view virtual {
-        if (uint160(address(this)) & 0x3fff != HOOK_FLAGS) revert InvalidAddress_0.InvalidAddress();
+        if (uint160(address(this)) & 0x3fff != HOOK_FLAGS) revert InvalidAddress();
     }
 
     /// @dev The progressive sell surcharge is part of the launch hook; the standard reference path disables it.
@@ -1570,7 +1544,7 @@ contract V4Market is ReentrancyGuard {
     }
 
     receive() external payable {
-        if (msg.sender != address(manager)) revert Unauthorized_0.Unauthorized();
+        if (msg.sender != address(manager)) revert Unauthorized();
     }
 
     function key() public view returns (PoolKey memory) {
@@ -1578,21 +1552,21 @@ contract V4Market is ReentrancyGuard {
     }
 
     function _check(PoolKey calldata k) private view {
-        if (msg.sender != address(manager) || keccak256(abi.encode(k)) != poolId) revert Unauthorized_0.Unauthorized();
+        if (msg.sender != address(manager) || keccak256(abi.encode(k)) != poolId) revert Unauthorized();
     }
 
     function spot() public view returns (uint256) {
         uint256 sqrt = uint160(uint256(manager.extsload(keccak256(abi.encode(poolId, uint256(6))))));
-        if (sqrt == 0) revert NotConfigured_0.NotConfigured();
+        if (sqrt == 0) revert NotConfigured();
         uint256 price = Math.mulDiv(Math.mulDiv(sqrt, sqrt, 1 << 96), 1 ether, 1 << 96);
-        if (price == 0 || price > 1e40) revert InvalidValue_0.InvalidValue();
+        if (price == 0 || price > 1e40) revert InvalidValue();
         return price;
     }
 
     function afterInitialize(address sender, PoolKey calldata k, uint160, int24) external returns (bytes4) {
         _check(k);
-        if (sender != launcher) revert Unauthorized_0.Unauthorized();
-        if (initializedAt != 0) revert AlreadyDone_0.AlreadyDone();
+        if (sender != launcher) revert Unauthorized();
+        if (initializedAt != 0) revert AlreadyDone();
         initializedAt = block.timestamp;
         _observe(spot());
         return this.afterInitialize.selector;
@@ -1600,7 +1574,7 @@ contract V4Market is ReentrancyGuard {
 
     function _observe(uint256 price) private {
         uint256 now_ = block.timestamp;
-        if (initializedAt == 0) revert NotConfigured_0.NotConfigured();
+        if (initializedAt == 0) revert NotConfigured();
         if (updatedAt == 0) {
             updatedAt = now_;
             lastPrice = price;
@@ -1622,15 +1596,15 @@ contract V4Market is ReentrancyGuard {
 
     function _cumulativeAt(uint256 minute) private view returns (uint256) {
         uint256 ts = minute * 60;
-        if (ts < initializedAt) revert NotConfigured_0.NotConfigured();
+        if (ts < initializedAt) revert NotConfigured();
         if (ts >= updatedAt) return cumulative + (1e60 / lastPrice) * (ts - updatedAt);
         Observation memory o = observations[minute % 32];
-        if (o.minute != minute) revert NotConfigured_0.NotConfigured();
+        if (o.minute != minute) revert NotConfigured();
         return o.cumulative;
     }
 
     function twap() public view returns (uint256) {
-        if (initializedAt == 0 || block.timestamp < initializedAt + 31 minutes) revert NotConfigured_0.NotConfigured();
+        if (initializedAt == 0 || block.timestamp < initializedAt + 31 minutes) revert NotConfigured();
         uint256 minute = block.timestamp / 60;
         uint256 averageETH = (_cumulativeAt(minute) - _cumulativeAt(minute - 30)) / 30 minutes;
         return 1e60 / averageETH;
@@ -1643,7 +1617,7 @@ contract V4Market is ReentrancyGuard {
     }
 
     function _record(bool sell, uint256 amount) private {
-        if (amount > type(uint192).max) revert InvalidValue_0.InvalidValue();
+        if (amount > type(uint192).max) revert InvalidValue();
         uint256 p = block.timestamp / 5 minutes;
         Volume storage a = shortVolumes[p % 12];
         if (a.period != p) {
@@ -1752,13 +1726,13 @@ contract V4Market is ReentrancyGuard {
         returns (bytes4, int256, uint24)
     {
         _check(k);
-        if (p.amountSpecified >= 0) revert InvalidValue_0.InvalidValue();
+        if (p.amountSpecified >= 0) revert InvalidValue();
         _observe(spot());
         if (!p.zeroForOne) return (this.beforeSwap.selector, 0, 0);
         uint256 ethIn = uint256(-p.amountSpecified);
         uint256 taxBps = currentBuyTaxBps();
         uint256 fee = ethIn * taxBps / 10000;
-        if (fee > uint256(uint128(type(int128).max))) revert InvalidValue_0.InvalidValue();
+        if (fee > uint256(uint128(type(int128).max))) revert InvalidValue();
         if (sinceLaunch() < LAUNCH_TAX_DECAY) {
             manager.take(address(0), address(this), fee);
             heldLaunchTax += fee;
@@ -1775,16 +1749,16 @@ contract V4Market is ReentrancyGuard {
         returns (bytes4, int128)
     {
         _check(k);
-        if (p.amountSpecified >= 0) revert InvalidValue_0.InvalidValue();
+        if (p.amountSpecified >= 0) revert InvalidValue();
         uint256 price = spot();
         _observe(price);
         int128 ethDelta = int128(delta >> 128);
         if (p.zeroForOne) {
-            if (ethDelta >= 0) revert InvalidValue_0.InvalidValue();
+            if (ethDelta >= 0) revert InvalidValue();
             _record(false, uint256(-int256(ethDelta)));
             return (this.afterSwap.selector, 0);
         }
-        if (ethDelta <= 0) revert InvalidValue_0.InvalidValue();
+        if (ethDelta <= 0) revert InvalidValue();
         uint256 output = uint256(uint128(ethDelta));
         _record(true, output);
         return (this.afterSwap.selector, int128(int256(_chargeSell(sender, output, price))));
@@ -1809,9 +1783,9 @@ contract V4Market is ReentrancyGuard {
 
     function buy(uint256 minOut, address recipient) external payable nonReentrant returns (uint256 received) {
         if (msg.sender != address(fees) || recipient == address(0) || msg.value == 0 || minOut == 0) {
-            revert Unauthorized_0.Unauthorized();
+            revert Unauthorized();
         }
-        if (initializedAt == 0 || sinceLaunch() < LAUNCH_TAX_DECAY) revert TooEarly_0.TooEarly();
+        if (initializedAt == 0 || sinceLaunch() < LAUNCH_TAX_DECAY) revert TooEarly();
         twap();
         buying = true;
         received = abi.decode(manager.unlock(abi.encode(msg.value, minOut, recipient)), (uint256));
@@ -1834,10 +1808,10 @@ contract V4Market is ReentrancyGuard {
 
     function sell(uint256 amount, uint256 minOut, address recipient) external nonReentrant returns (uint256 received) {
         if (msg.sender != address(fees) || recipient != address(fees) || amount == 0 || minOut == 0) {
-            revert Unauthorized_0.Unauthorized();
+            revert Unauthorized();
         }
-        if (amount > maxSellBatch()) revert InvalidValue_0.InvalidValue();
-        if (minOut < quoteSell(amount) * 9850 / 10000) revert InvalidValue_0.InvalidValue();
+        if (amount > maxSellBatch()) revert InvalidValue();
+        if (minOut < quoteSell(amount) * 9850 / 10000) revert InvalidValue();
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
         selling = true;
         received = abi.decode(manager.unlock(abi.encode(amount, minOut, recipient)), (uint256));
@@ -1853,13 +1827,11 @@ contract V4Market is ReentrancyGuard {
         _observe(spot());
         int128 ethOut = int128(delta >> 128);
         int128 tokenIn = int128(delta);
-        if (ethOut <= 0 || tokenIn >= 0 || uint256(-int256(tokenIn)) != amount) {
-            revert InsufficientBalance_0.InsufficientBalance();
-        }
+        if (ethOut <= 0 || tokenIn >= 0 || uint256(-int256(tokenIn)) != amount) revert InsufficientBalance();
         uint256 gross = uint256(uint128(ethOut));
         uint256 base = gross * PROJECT_BPS / 10000;
         uint256 net = gross - base;
-        if (net < minimum) revert InsufficientBalance_0.InsufficientBalance();
+        if (net < minimum) revert InsufficientBalance();
         manager.sync(token);
         IERC20(token).safeTransfer(address(manager), amount);
         manager.settle();
@@ -1867,12 +1839,12 @@ contract V4Market is ReentrancyGuard {
         heldBase += base;
         _record(true, gross);
         (bool ok,) = recipient.call{value: net}("");
-        if (!ok) revert TransferFailed_0.TransferFailed();
+        if (!ok) revert TransferFailed();
         return abi.encode(net);
     }
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(manager) || (!buying && !selling)) revert Unauthorized_0.Unauthorized();
+        if (msg.sender != address(manager) || (!buying && !selling)) revert Unauthorized();
         if (selling) return _sellCallback(data);
         (uint256 ethIn, uint256 minOut, address recipient) = abi.decode(data, (uint256, uint256, address));
         uint256 base = ethIn * PROJECT_BPS / 10000;
@@ -1887,7 +1859,7 @@ contract V4Market is ReentrancyGuard {
             ethDelta >= 0 || uint256(-int256(ethDelta)) != input || tokenDelta <= 0
                 || uint256(uint128(tokenDelta)) < minOut
         ) {
-            revert InsufficientBalance_0.InsufficientBalance();
+            revert InsufficientBalance();
         }
         _record(false, input);
         manager.settle{value: input}();

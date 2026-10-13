@@ -1,4 +1,12 @@
-# BLACKOUT v3.8
+# BLACKOUT v3.8 (source v3.13)
+
+**v3.13 (review finding 6d1287b0, fixed in source).** `FeeRouter` now reads `Params.HeartbeatBps` (packed
+regulator key 41, bounds 200–5000, 200 at launch) for the heartbeat share of the sell surcharge and of routed
+tokens instead of a literal 200; the 1 ETH cap and every other split are unchanged. Every creation-code pin was
+regenerated under the launch profile, which `foundry.toml` now *is* (via_ir false, bytecode_hash none), so the
+repository build and the launch build are one toolchain. Params keys without a reader are documented as reserved
+in [docs/params-keys-v313.md](docs/params-keys-v313.md); the twelve SwarmDesk constructor words are unchanged.
+See `report.md` §v3.13 for the new hashes.
 
 Source-only continuation of v3.7 against the real IMD platform (research job b94e6839): no launch number is known at construction, the 20% endowment goes through an ownerless `EndowmentEscrow`, the hook matches the platform pool fee 12500, and the Desk accepts relayed attestations through `submit`. See [launch-v38.md](launch-v38.md) for what is done and what is still open. No deployment, broadcast, token launch or mint. [@IMDBlackout](https://x.com/IMDBlackout) · [playblackout.xyz](https://playblackout.xyz) · [free pack claim](https://playblackout.xyz/freepack).
 
@@ -39,7 +47,7 @@ node test/ui-v35.test.mjs
 python3 sim/run_v35.py
 ```
 
-After a Solidity change: format, build, regenerate module pins with `python3 tools/pin_module_code.py`, rebuild, and check pins. Creation-code metadata is part of the binding. After changing pins, use a clean build before deriving launch addresses so prediction helpers cannot retain cached embedded bytecode. The opt-in historical fork test remains separate; the real PoolManager integration runs locally.
+After a Solidity change: format, build, regenerate module pins with `python3 tools/pin_module_code.py`, then `python3 tools/pin_swarm_code.py`, re-flatten the hook (`forge flatten src/V4Market.sol -o launch/V4Market.sol`), rebuild, and check pins. Since v3.13 `foundry.toml` is the launch profile, so the `out/` and `out-launch/` builds are byte-identical and both pins of every role are the same hash; the `FOUNDRY_VIA_IR=false FOUNDRY_BYTECODE_HASH=none` overrides are now no-ops kept for the tools. Creation-code metadata is part of the binding. After changing pins, use a clean build before deriving launch addresses so prediction helpers cannot retain cached embedded bytecode. The opt-in historical fork test remains separate; the real PoolManager integration runs locally.
 
 ## After launch
 

@@ -4,11 +4,17 @@ Source only. Nothing in this repository has been deployed, broadcast, bought, si
 authorizes none of it: every paid step below is a separate, requester-approved IMD job. It supersedes
 `launch-v38.md`, `launch-v37.md` and older runbooks where they differ.
 
+**v3.13 (review finding 6d1287b0).** `FeeRouter` reads `Params.HeartbeatBps` instead of a literal 200 bps, so
+the pins of FeeRouter, GameRegistry, SwarmDesk, EndowmentEscrow and V4Market moved (`report.md` §v3.13).
+`foundry.toml` is now the launch profile. Every objective below names the **accepted BLACKOUT v3.13 commit**;
+the M1 constructor words, the Params pin and the oracle bodies are unchanged. Reserved Params keys:
+[docs/params-keys-v313.md](docs/params-keys-v313.md).
+
 **v3.12 (job c36ea654).** This version applies the corrections from research job 4e478378: named
 `$contract:Params` / `$contract:GameRegistry` references in M4, the ProjectFactory registry
 `0xf52b…8406` for proofs, the M3 request fields, objective texts with one common paragraph, a pointer to
 [docs/m2-trust-assumption.md](docs/m2-trust-assumption.md) in M1 and M4, and realistic timing (§2a).
-Every objective now names the **accepted BLACKOUT v3.12 commit**. No contract changed. The launch pins are
+Every objective now names the **accepted BLACKOUT v3.13 commit**. No contract changed. The launch pins are
 the same as v3.9–v3.11 (see `report.md` §v3.12). The research report itself was not in this workspace, so the
 objective texts below were written from the corrections the brief lists. Compare them with research 4e478378
 before pasting. **`foundry.toml` was not changed in v3.12** (the platform protects it in this job type): it
@@ -23,11 +29,15 @@ platform contracts, impersonating the platform deployer; nothing is broadcast.
 ## 0. Rules for every step
 
 - **One toolchain.** Every contract is deployed from the IMD verifier build of the accepted commit:
-  solc 0.8.26, optimizer 200, cancun, `FOUNDRY_VIA_IR=false FOUNDRY_BYTECODE_HASH=none` (the `out-launch/`
-  artifacts). The hook embeds `type(GameRegistry).creationCode` from its own build, so a registry or Params
-  built with the repository's via-IR toolchain binds to the Desk but **never** to the hook (review L-1). Before
-  each paid step, check the job's attested creation-code hash against `src/lib/SwarmCode.sol`
-  (`REGISTRY_LAUNCH`, `PARAMS_LAUNCH`) and `ModuleCode.launchHash(role)`.
+  solc 0.8.26, optimizer 200, cancun, via_ir false, bytecode_hash none. Since v3.13 that is exactly
+  `foundry.toml`, so a plain `forge build` (`out/`) and the `FOUNDRY_VIA_IR=false FOUNDRY_BYTECODE_HASH=none`
+  build (`out-launch/`) are byte-identical. The hook embeds `type(GameRegistry).creationCode` from its own
+  build, so a registry or Params built with any other profile binds to nothing (review L-1). Before each paid
+  step, check the job's attested creation-code hash against `src/lib/SwarmCode.sol` (`REGISTRY_LAUNCH`,
+  `PARAMS_LAUNCH`) and `ModuleCode.launchHash(role)`. **v3.13 moved the pins** of FeeRouter (role 6),
+  GameRegistry, SwarmDesk, EndowmentEscrow and V4Market (`report.md` §v3.13,
+  `artifacts/v313/launch-creation-hashes.txt`); Params and the other thirteen modules are unchanged, and so
+  are the twelve M1 constructor words.
 - **Keep the game configuration private until `Desk.bind`.** `starterRoot`, `freeRoot`, `snapshotBlock` and the
   eligibility lists stay unpublished until step M7 has passed its check. Anyone who knows them and the token can
   launch a twin registry through the factory and bind the Desk first (review M-2). Publish the free-pack lists
@@ -132,7 +142,7 @@ The paid steps are sequential (each needs the previous step's address), so the c
 
 ### Common paragraph (append verbatim to the M1, M2, M4 and M7 objectives)
 
-> Source: the accepted BLACKOUT v3.12 commit of identity-md-launches/launch-1269-reports-v1-job-b9e37680-814c-4f17-b4bc-6. Build exactly with solc 0.8.26, optimizer true, 200 runs, evm cancun, viaIR false, bytecode_hash none, and deploy the creation code as built. The contracts authenticate each other by creation-code hash (src/lib/SwarmCode.sol, ModuleCode.launchHash), so another build cannot be wired. Chain: Robinhood Chain (4663). Platform proofs use the ProjectFactory 0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e (predictContract) and its launch registry 0xf52bbe066b7ad2d28c2195d066ea08dcbca88406 (isRecorded). No owner, admin key, upgrade, withdrawal, token action, mint or placeholder: every constructor value is listed above. Known trust assumption: docs/m2-trust-assumption.md (twin front-run of SwarmDesk.bind, griefing only, mitigated by binding right after job A). Project: https://playblackout.xyz · https://x.com/IMDBlackout
+> Source: the accepted BLACKOUT v3.13 commit of identity-md-launches/launch-1269-reports-v1-job-b9e37680-814c-4f17-b4bc-6. Build exactly with solc 0.8.26, optimizer true, 200 runs, evm cancun, viaIR false, bytecode_hash none, and deploy the creation code as built. The contracts authenticate each other by creation-code hash (src/lib/SwarmCode.sol, ModuleCode.launchHash), so another build cannot be wired. Chain: Robinhood Chain (4663). Platform proofs use the ProjectFactory 0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e (predictContract) and its launch registry 0xf52bbe066b7ad2d28c2195d066ea08dcbca88406 (isRecorded). No owner, admin key, upgrade, withdrawal, token action, mint or placeholder: every constructor value is listed above. Known trust assumption: docs/m2-trust-assumption.md (twin front-run of SwarmDesk.bind, griefing only, mitigated by binding right after job A). Project: https://playblackout.xyz · https://x.com/IMDBlackout
 
 Each paid step lists its objective text (paste verbatim after filling the `<...>` values; each is well under
 8000 characters), its inputs and the check that proves it worked. Permissionless calls (M7 onward) can be
@@ -175,7 +185,7 @@ and **no `initialMarketCapWei`** (only `custom_token` takes it; the ETH-pair ope
 
 Objective:
 
-> BLACKOUT token launch on Robinhood Chain (4663): onchain univ4_hook, pairWith eth, platform pool fee 12500 (1.25%: 1% to the paying wallet via LaunchFactory.claimFees, 0.25% to the IMD network), economics poolBps 7000 and remainderTo <ESCROW> (the BLACKOUT EndowmentEscrow; the 20% endowment reaches the game RewardPool only through it). Hook: `V4Market` from the accepted BLACKOUT v3.12 commit (solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none), constructor ($poolManager, $token, 12500, 60, $factory, 0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e, <DESK>, <GAME_CONFIG_HASH>). The hook has no owner; after the stepped 30-minute launch tax it adds exactly 1% to game rewards on every swap plus the progressive sell surcharge. Paying wallet 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007. Record the token, hook and launch number. https://x.com/IMDBlackout · https://playblackout.xyz
+> BLACKOUT token launch on Robinhood Chain (4663): onchain univ4_hook, pairWith eth, platform pool fee 12500 (1.25%: 1% to the paying wallet via LaunchFactory.claimFees, 0.25% to the IMD network), economics poolBps 7000 and remainderTo <ESCROW> (the BLACKOUT EndowmentEscrow; the 20% endowment reaches the game RewardPool only through it). Hook: `V4Market` from the accepted BLACKOUT v3.13 commit (solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none), constructor ($poolManager, $token, 12500, 60, $factory, 0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e, <DESK>, <GAME_CONFIG_HASH>). The hook has no owner; after the stepped 30-minute launch tax it adds exactly 1% to game rewards on every swap plus the progressive sell surcharge. Paying wallet 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007. Record the token, hook and launch number. https://x.com/IMDBlackout · https://playblackout.xyz
 
 Check: `cast call <TOKEN> "balanceOf(address)(uint256)" <ESCROW>` ≥ 200,000,000e18 (the 20% plus any pool
 dust the factory did not seed; the fork showed +0.056%); the pool key is `(ETH 0x0, TOKEN, 12500, 60, HOOK)`;
@@ -249,7 +259,7 @@ both with the free schedule check first.
 
 Objective (one request per schedule; paste the generated JSON as the input):
 
-> BLACKOUT oracle schedule (Ethereum payment, consumer SwarmDesk <DESK> on Robinhood Chain 4663). Create the schedule exactly as in the attached `schedule.create` body generated by `tools/make_oracle_bodies.mjs` from the accepted BLACKOUT v3.12 commit: committed question body byte-for-byte (questionHash <QUESTION_HASH> from docs/oracle-v37/oracle-config.json), consumer {chainId 4663, verifyingContract <DESK>}, no deliver, cadence <CRON> UTC, <RUNS> runs. Answers are relayed permissionlessly to SwarmDesk.submit. https://x.com/IMDBlackout
+> BLACKOUT oracle schedule (Ethereum payment, consumer SwarmDesk <DESK> on Robinhood Chain 4663). Create the schedule exactly as in the attached `schedule.create` body generated by `tools/make_oracle_bodies.mjs` from the accepted BLACKOUT v3.13 commit: committed question body byte-for-byte (questionHash <QUESTION_HASH> from docs/oracle-v37/oracle-config.json), consumer {chainId 4663, verifyingContract <DESK>}, no deliver, cadence <CRON> UTC, <RUNS> runs. Answers are relayed permissionlessly to SwarmDesk.submit. https://x.com/IMDBlackout
 
 Check: `GET /schedules/<id>` shows status active and the runs; after the first run,
 `GET /oracle/requests/<run>/attestation` has `verifyingContract` = `<DESK>`, chainId 4663 and the pinned
