@@ -24,23 +24,37 @@ contract EventsTest is DeferredEntryTest {
         d.grid.submitPlan(2, GridOperator.Kind.Calm, 10000, bytes32(uint256(8)), "overwrite");
     }
 
+    /// @dev v3.17 (audit 339b6b19 low 2): a lapsed window re-arms instead of using a precomputable fallback seed.
     function testFallbackAndExpiredSeedIndependentOfSwarmNumber() public {
         vm.roll(vm.getBlockNumber() + 300);
-        d.grid.resolve(1);
+        assertFalse(d.grid.resolve(1));
         (GridOperator.Kind k,,, bytes32 seed, bool resolved) = d.grid.eventAt(1);
+        assertFalse(resolved);
+        uint64 fresh = d.grid.eventTarget(1);
+        vm.roll(uint256(fresh) + 1);
+        vm.setBlockhash(fresh, keccak256("fresh 1"));
+        assertTrue(d.grid.resolve(1));
+        (k,,, seed, resolved) = d.grid.eventAt(1);
         assertTrue(resolved);
-        assertEq(uint256(k), uint256(d.grid.fallbackKind(1)));
-        assertEq(seed, keccak256(abi.encode(address(d.grid), uint256(1), "fixed fallback")));
+        assertTrue(seed != keccak256(abi.encode(address(d.grid), uint256(1), "fixed fallback")));
+        assertEq(seed, keccak256(abi.encode(bytes32(0), keccak256("fresh 1"), address(d.grid), uint256(1))));
         vm.prank(swarm);
         d.grid.submitPlan(2, GridOperator.Kind.Surge, 10000, keccak256("attacker grinding"), "expired plan");
         vm.warp(d.rewards.epochEnd());
         d.rewards.advanceEpoch();
         finish();
         vm.roll(vm.getBlockNumber() + 300);
-        d.grid.resolve(2);
+        assertFalse(d.grid.resolve(2));
+        fresh = d.grid.eventTarget(2);
+        vm.roll(uint256(fresh) + 1);
+        vm.setBlockhash(fresh, keccak256("fresh 2"));
+        assertTrue(d.grid.resolve(2));
         (k,,, seed,) = d.grid.eventAt(2);
-        assertEq(uint256(k), uint256(d.grid.fallbackKind(2)));
-        assertEq(seed, keccak256(abi.encode(address(d.grid), uint256(2), "fixed fallback")));
+        assertEq(uint256(k), uint256(GridOperator.Kind.Surge), "the submitted plan survives a lapsed window");
+        assertEq(
+            seed,
+            keccak256(abi.encode(keccak256("attacker grinding"), keccak256("fresh 2"), address(d.grid), uint256(2)))
+        );
     }
 
     function testRollingCapsAndInitialPositiveQuotaWithHostilePlans() public {

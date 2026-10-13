@@ -1,8 +1,8 @@
 {
-  "version": "3.16",
+  "version": "3.17",
   "chainId": 4663,
   "gameConfigHash": "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3",
-  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records. v3.16 changes only the SwarmDesk creation hash and adds its eighth constructor word, the binder 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007 (the project wallet that signs the one bind call; not an IMD protocol address); the other 18 hashes are byte-identical to v3.14/v3.15.",
+  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records. v3.17 ports the sticky farmDaily basis (FarmRewards) and fixes pre-token audit 339b6b19 (Enhancement lapse, GridOperator re-arm, Economy.unlock liveness, destroyed-item weight), so nine of the 19 creation hashes changed: SwarmDesk, EndowmentEscrow, V4Market and GameRegistry (regenerated SwarmCode/ModuleCode pins), FarmRewards, FarmCore, GridOperator, Economy and Enhancement. Params, RewardPool, FarmItems, PackSale, StarterClaim, FeeRouter, Season, FarmEngine, Civic and Billboards are byte-identical to v3.16. Constructor words are unchanged; the Desk's eighth word is still the binder 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007 (project wallet, not an IMD protocol address).",
   "launches": [
     {
       "id": "L1",
@@ -20,14 +20,14 @@
             "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3",
             "0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007"
           ],
-          "creationHash": "0x81b258d403f90ab53a3c52d0b5ee895e57b2c80667b6fb82b637c3cf92a17b59"
+          "creationHash": "0x1d8e1afa90ba7a4c436fa2406f52743c97f7e6d9add372516144cadcb0795879"
         },
         {
           "name": "EndowmentEscrow",
           "constructorArgs": [
             "$contract:SwarmDesk"
           ],
-          "creationHash": "0x8120758fa38683db9af5b5dbd28c6bd5682f58f160e36b1fc951815082101087"
+          "creationHash": "0xe7a48446223ad53d50a9a9372c5552b70fb94e4f03c0f9f45298f7e5d2036368"
         }
       ]
     },
@@ -51,7 +51,7 @@
             "<L1_SWARM_DESK>",
             "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"
           ],
-          "creationHash": "0xb3a295abe415ce500a185349e2b831e67d06993d647b3831babacdfc96fb00d3"
+          "creationHash": "0x17e05386811fe526f0f44b95338a881b74127920e0f0587dbd1f798028b09931"
         }
       ]
     },
@@ -79,7 +79,7 @@
             "<SNAPSHOT_BLOCK>",
             "200000000000000000000000000"
           ],
-          "creationHash": "0xb763989d9f8be8f545dd607d7bc7810001086e9e65bdf6fe9521e5ec9ddc5c88"
+          "creationHash": "0xe41104da4edfb9a746e9080ce7b1885b5fe7609674a3a68fc5addbfd5a871531"
         },
         {
           "name": "RewardPool",
@@ -93,14 +93,14 @@
           "constructorArgs": [
             "$contract:GameRegistry"
           ],
-          "creationHash": "0xf8f9f93e6bd8df85caaf5c508a71fb285a2f6229a5ef54023ac49ba66a14a001"
+          "creationHash": "0xfa1a4087722916aeefae66aaf3400299a5e4cb8f4fc8e516a17cec7754e07506"
         },
         {
           "name": "FarmCore",
           "constructorArgs": [
             "$contract:GameRegistry"
           ],
-          "creationHash": "0xd6b7d7555a5865832a6d352b2a0bfa96ea10857b076a4cc156d5ad78cd1044fa"
+          "creationHash": "0xc390b07ef7a9ab65bef3a1ec3b39c1a16e117543c9565fedc9342526aa57aa47"
         },
         {
           "name": "FarmItems",
@@ -141,7 +141,7 @@
           "constructorArgs": [
             "<L3_GAME_REGISTRY>"
           ],
-          "creationHash": "0xf21418187e35f2785dfd16075ad4b1bf855552ac4b413592f29d7222777974e9"
+          "creationHash": "0x931bdfaeeacadb7c8014ce1411671d0045013c2b373d95bbf0bb83dfce0b7c74"
         },
         {
           "name": "Season",
@@ -162,14 +162,14 @@
           "constructorArgs": [
             "<L3_GAME_REGISTRY>"
           ],
-          "creationHash": "0x071421985d28e92da4caf5c8f17148d0cc9a8be8af66e7852d909d0a867b7e5d"
+          "creationHash": "0x105f9f29d79579fa33ff8e11d4d86847dd7d9f59bd681500553a3844db50ccc9"
         },
         {
           "name": "Enhancement",
           "constructorArgs": [
             "<L3_GAME_REGISTRY>"
           ],
-          "creationHash": "0x19ff379fb18f8649bc3889c3f8981bcf40d7c4045fe066dde9014b55b9751689"
+          "creationHash": "0x31242676dd3a728a2ad32a5cb300166020e87831b0f547756fa0bab88cedea38"
         },
         {
           "name": "Civic",

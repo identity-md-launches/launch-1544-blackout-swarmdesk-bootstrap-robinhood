@@ -1,4 +1,14 @@
-# BLACKOUT v3.8 (source v3.16)
+# BLACKOUT v3.8 (source v3.17)
+
+**v3.17 (pre-token audit 339b6b19 and the launch-1593 farmDaily port, fixed in source).** `FarmRewards.lastFarmDaily`
+is a sticky basis: a higher settled yield replaces it at once, a lower one only decays it by 1/96 per settled epoch, and
+a pro-rata entry epoch is scaled to a full epoch. An enhancement attempt whose 256-block window lapses is settled as the
+worst outcome of its level instead of re-arming (lapsing is never better than resolving). A grid event whose window
+lapses re-arms to a fresh block and keeps the submitted plan; `advanceEpoch` then returns without closing the epoch
+until the fresh hash exists. `Economy.unlock` always returns an expired lock's principal and skips the weight resync
+while no epoch is live or the account is behind. An item destroyed by an event leaves the farm's committed weight at the
+next epoch. Nine of the 19 creation hashes changed; see `report.md` §v3.17, [launch-v39.md](launch-v39.md) and
+[docs/accepted-v317.md](docs/accepted-v317.md).
 
 **v3.16 (import audit 10bfac6d, fixed in source).** `SwarmDesk.bind` is restricted to one pinned binder, the
 Desk's eighth constructor word (the project wallet `0x6d51…d007` for the launch); every v3.15 proof still runs for

@@ -200,9 +200,20 @@ contract SwarmDeskV37Test is BaseTest {
         assertEq(uint256(d.grid.planAt(2).kind), 7);
         assertEq(d.grid.planAt(2).severity, 5000);
         assertEq(desk.districtHint(), 7);
-        // Epoch 1 was already started without a plan; expired entropy uses the unchanged fixed table.
+        // Epoch 1 was already started without a plan. v3.17: a lapsed window re-arms instead of using a seed
+        // computable in advance; the unchanged fixed table still decides the kind once a fresh hash exists.
         vm.roll(block.number + 300);
-        d.grid.resolve(1);
+        assertFalse(d.grid.resolve(1));
+        uint64 fresh = d.grid.eventTarget(1);
+        uint256 positive = d.params.get(Params.Key.PositiveWeight);
+        bytes32 h;
+        for (uint256 n = 1;; ++n) {
+            h = keccak256(abi.encode(n, "fresh"));
+            if (uint256(keccak256(abi.encode(bytes32(0), h, address(d.grid), uint256(1)))) % 10000 >= positive) break;
+        }
+        vm.roll(uint256(fresh) + 1);
+        vm.setBlockhash(fresh, h);
+        assertTrue(d.grid.resolve(1));
         (GridOperator.Kind kind, uint16 severity,,, bool resolved) = d.grid.eventAt(1);
         assertTrue(resolved);
         assertEq(uint256(kind), uint256(d.grid.fallbackKind(1)));

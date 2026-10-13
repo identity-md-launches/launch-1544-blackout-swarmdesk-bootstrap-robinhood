@@ -16,6 +16,9 @@ interface IYieldRewards {
     function lastYieldPerHash() external view returns (uint256);
     function lastFarmDaily(address) external view returns (uint256);
     function lastAverageDaily() external view returns (uint256);
+    function live() external view returns (bool);
+    function lastSettled(address) external view returns (uint256);
+    function settledEpoch() external view returns (uint256);
 }
 
 interface IFeatureFlags {
@@ -150,10 +153,14 @@ contract Economy is GameModule, ReentrancyGuard {
         emit Locked(msg.sender, amount, block.timestamp + days_ * 1 days, bps);
     }
 
+    /// @notice v3.17 (audit 339b6b19 low 3): an expired lock's principal is never held back by epoch liveness. The
+    /// weight resync is skipped while no epoch is live or the account is behind the settled epoch; the next owner
+    /// action re-syncs it, and `boostAt` already reports zero past `end`.
     function unlock() external nonReentrant {
         Lock memory l = locks[msg.sender];
         if (l.amount == 0 || block.timestamp < l.end) revert TooEarly();
-        IEconomyCore(registry.module(2)).syncFor(msg.sender);
+        bool resync = _canResync(msg.sender);
+        if (resync) IEconomyCore(registry.module(2)).syncFor(msg.sender);
         delete locks[msg.sender];
         districtTotal[district(msg.sender)] -= l.amount;
         totalLocked -= l.amount;
@@ -164,9 +171,15 @@ contract Economy is GameModule, ReentrancyGuard {
         if (after_ != address(0)) previous[after_] = before_;
         delete previous[msg.sender];
         delete next[msg.sender];
-        IEconomyCore(registry.module(2)).syncFor(msg.sender);
+        if (resync) IEconomyCore(registry.module(2)).syncFor(msg.sender);
         IERC20(registry.token()).safeTransfer(msg.sender, l.amount);
         emit Unlocked(msg.sender, l.amount);
+    }
+
+    /// @notice True when `unlock` will re-sync the farm weight: an epoch is live and the account is caught up.
+    function _canResync(address p) private view returns (bool) {
+        IYieldRewards r = rewards();
+        return r.live() && r.lastSettled(p) >= r.settledEpoch();
     }
 
     function _insert(uint256 d, address p) private {

@@ -807,17 +807,17 @@ library Math {
 library ModuleCode {
     function launchHash(uint256 role) internal pure returns (bytes32) {
         if (role == 0) return 0xecf3ae5ebb791318703b5e79960cfd243b7d89bdffa0e0501bee5146623764de; // RewardPool
-        if (role == 1) return 0xf8f9f93e6bd8df85caaf5c508a71fb285a2f6229a5ef54023ac49ba66a14a001; // FarmRewards
-        if (role == 2) return 0xd6b7d7555a5865832a6d352b2a0bfa96ea10857b076a4cc156d5ad78cd1044fa; // FarmCore
+        if (role == 1) return 0xfa1a4087722916aeefae66aaf3400299a5e4cb8f4fc8e516a17cec7754e07506; // FarmRewards
+        if (role == 2) return 0xc390b07ef7a9ab65bef3a1ec3b39c1a16e117543c9565fedc9342526aa57aa47; // FarmCore
         if (role == 3) return 0x98f7224201d9e7e3d16bd8996c29a522cac5bd1b375181de8cfdc2c6b9639e76; // FarmItems
         if (role == 4) return 0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737a; // PackSale
         if (role == 5) return 0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90; // StarterClaim
         if (role == 6) return 0x3b53c8d89f2836c0744007bac7e168e6c66dd19eaf4a74b2eadd5161ad12e6af; // FeeRouter
-        if (role == 7) return 0xf21418187e35f2785dfd16075ad4b1bf855552ac4b413592f29d7222777974e9; // GridOperator
+        if (role == 7) return 0x931bdfaeeacadb7c8014ce1411671d0045013c2b373d95bbf0bb83dfce0b7c74; // GridOperator
         if (role == 8) return 0xa79fdfbecdb2450bc94c1cedac7618b1f4244fe63c3f1bc6fea784f82cd42c83; // Season
         if (role == 9) return 0x48a9f8dd8c707a2a8c6b4a1838640be765a3e3c9d2306680bda5ce679b6dbe7c; // FarmEngine
-        if (role == 10) return 0x071421985d28e92da4caf5c8f17148d0cc9a8be8af66e7852d909d0a867b7e5d; // Economy
-        if (role == 11) return 0x19ff379fb18f8649bc3889c3f8981bcf40d7c4045fe066dde9014b55b9751689; // Enhancement
+        if (role == 10) return 0x105f9f29d79579fa33ff8e11d4d86847dd7d9f59bd681500553a3844db50ccc9; // Economy
+        if (role == 11) return 0x31242676dd3a728a2ad32a5cb300166020e87831b0f547756fa0bab88cedea38; // Enhancement
         if (role == 12) return 0xb3e89ec00b8ad51904cdac336644a6025ceea25c15fa931cac2ad13d89dc0bb2; // Civic
         if (role == 13) return 0x3cb8b542f7baa025b6db7f2a4864288a594d05e75b9b4e9ec66416c1fe52aa60; // Billboards
         return bytes32(0);
@@ -825,17 +825,17 @@ library ModuleCode {
 
     function repoHash(uint256 role) internal pure returns (bytes32) {
         if (role == 0) return 0xecf3ae5ebb791318703b5e79960cfd243b7d89bdffa0e0501bee5146623764de; // RewardPool
-        if (role == 1) return 0xf8f9f93e6bd8df85caaf5c508a71fb285a2f6229a5ef54023ac49ba66a14a001; // FarmRewards
-        if (role == 2) return 0xd6b7d7555a5865832a6d352b2a0bfa96ea10857b076a4cc156d5ad78cd1044fa; // FarmCore
+        if (role == 1) return 0xfa1a4087722916aeefae66aaf3400299a5e4cb8f4fc8e516a17cec7754e07506; // FarmRewards
+        if (role == 2) return 0xc390b07ef7a9ab65bef3a1ec3b39c1a16e117543c9565fedc9342526aa57aa47; // FarmCore
         if (role == 3) return 0x98f7224201d9e7e3d16bd8996c29a522cac5bd1b375181de8cfdc2c6b9639e76; // FarmItems
         if (role == 4) return 0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737a; // PackSale
         if (role == 5) return 0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90; // StarterClaim
         if (role == 6) return 0x3b53c8d89f2836c0744007bac7e168e6c66dd19eaf4a74b2eadd5161ad12e6af; // FeeRouter
-        if (role == 7) return 0xf21418187e35f2785dfd16075ad4b1bf855552ac4b413592f29d7222777974e9; // GridOperator
+        if (role == 7) return 0x931bdfaeeacadb7c8014ce1411671d0045013c2b373d95bbf0bb83dfce0b7c74; // GridOperator
         if (role == 8) return 0xa79fdfbecdb2450bc94c1cedac7618b1f4244fe63c3f1bc6fea784f82cd42c83; // Season
         if (role == 9) return 0x48a9f8dd8c707a2a8c6b4a1838640be765a3e3c9d2306680bda5ce679b6dbe7c; // FarmEngine
-        if (role == 10) return 0x071421985d28e92da4caf5c8f17148d0cc9a8be8af66e7852d909d0a867b7e5d; // Economy
-        if (role == 11) return 0x19ff379fb18f8649bc3889c3f8981bcf40d7c4045fe066dde9014b55b9751689; // Enhancement
+        if (role == 10) return 0x105f9f29d79579fa33ff8e11d4d86847dd7d9f59bd681500553a3844db50ccc9; // Economy
+        if (role == 11) return 0x31242676dd3a728a2ad32a5cb300166020e87831b0f547756fa0bab88cedea38; // Enhancement
         if (role == 12) return 0xb3e89ec00b8ad51904cdac336644a6025ceea25c15fa931cac2ad13d89dc0bb2; // Civic
         if (role == 13) return 0x3cb8b542f7baa025b6db7f2a4864288a594d05e75b9b4e9ec66416c1fe52aa60; // Billboards
         return bytes32(0);

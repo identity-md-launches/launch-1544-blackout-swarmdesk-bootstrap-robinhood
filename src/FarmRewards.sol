@@ -17,6 +17,9 @@ contract FarmRewards is GameModule, ReentrancyGuard {
     uint256 public constant PRECISION = 1e27;
     /// @notice A commitment stays in the global denominator for this many epochs after the last owner action.
     uint256 public constant IDLE_EPOCHS = 12;
+    /// @notice The farm price basis (`lastFarmDaily`) rises to any higher settled yield at once and otherwise
+    /// decays by 1/96 per settled epoch (about 4% a day), so one low-yield epoch cannot reprice a farm to the floor.
+    uint256 public constant FARM_DAILY_DECAY = 96;
 
     struct Epoch {
         uint64 start;
@@ -159,14 +162,21 @@ contract FarmRewards is GameModule, ReentrancyGuard {
         return epochs[epoch].end;
     }
 
+    /// @notice v3.17: when the closing epoch's event hash window lapsed, the grid re-arms it and this call returns
+    /// without closing the epoch; call again (or `GridOperator.resolve`) once the fresh target block hash exists.
+    event EpochCloseDeferred(uint256 indexed epoch);
+
     function advanceEpoch() external nonReentrant {
         if (block.timestamp < launchTime() || (epoch != 0 && block.timestamp < epochs[epoch].end)) revert TooEarly();
+        if (epoch != 0 && !grid().resolveFor(epoch, msg.sender)) {
+            emit EpochCloseDeferred(epoch);
+            return;
+        }
         if (scrapAllowance != 0) {
             pool().recycle(scrapAllowance);
             scrapAllowance = 0;
         }
         if (epoch != 0) {
-            grid().resolveFor(epoch, msg.sender);
             Epoch storage old = epochs[epoch];
             (old.kind, old.severity, old.district, old.seed,) = grid().eventAt(epoch);
             old.redis = currentRedis;
@@ -258,7 +268,16 @@ contract FarmRewards is GameModule, ReentrancyGuard {
     function setWeight(address p, uint256 weight) external onlyCore {
         Account storage a = accounts[p];
         if (!a.initialized || a.lastSettled < settledEpoch) revert CatchUpRequired();
+        delete resyncDue[p];
         _commit(a, p, weight);
+    }
+
+    /// @notice v3.17 (audit 339b6b19 low 4): Core flags a farm whose settlement removed a destroyed item. The
+    /// commitment is recomputed from the loadout as soon as the farm is caught up, taking effect next epoch.
+    mapping(address => bool) public resyncDue;
+
+    function flagResync(address p) external onlyCore {
+        resyncDue[p] = true;
     }
 
     function _commit(Account storage a, address p, uint256 weight) private {
@@ -352,6 +371,11 @@ contract FarmRewards is GameModule, ReentrancyGuard {
             a.lastSettled = cursor; // CEI and monotonically increasing, including zero-yield epochs.
             _settleOne(p, cursor);
         }
+        // A commitment may only change once every closed epoch is settled (two weight generations are tracked).
+        if (cursor >= settledEpoch && resyncDue[p]) {
+            delete resyncDue[p];
+            _commit(a, p, core().committedHash(p));
+        }
     }
 
     function _settleOne(address p, uint256 id) private {
@@ -421,7 +445,13 @@ contract FarmRewards is GameModule, ReentrancyGuard {
         // Protocol maximum district/event boosts bound productive hash by 150% of committed allocation hash.
         if (spent > o.allocation) revert InvalidValue();
         _credit(p, o.net + o.redis, id, e.end);
-        lastFarmDaily[p] = o.net * 4;
+        // Sticky price basis: a pro-rata entry epoch is scaled to its full-epoch equivalent, and a settled
+        // yield below the decayed previous basis (an engineered or event-hit zero-net epoch) only decays it.
+        uint256 daily = o.net * 4;
+        uint256 entry = entrySeconds[id][p];
+        if (entry != 0) daily = Math.mulDiv(daily, EPOCH, entry);
+        uint256 previous = lastFarmDaily[p];
+        lastFarmDaily[p] = Math.max(daily, previous - previous / FARM_DAILY_DECAY);
         core().autoRepair(p, id);
         e.spent += spent;
         e.allocated += o.allocation;

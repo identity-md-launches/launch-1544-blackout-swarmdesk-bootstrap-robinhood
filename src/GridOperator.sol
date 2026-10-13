@@ -179,28 +179,37 @@ contract GridOperator is GameModule, ReentrancyGuard {
         return Kind(table[(e - 1) % 20]);
     }
 
-    function resolve(uint256 e) public nonReentrant {
-        _resolve(e, msg.sender);
+    /// @notice v3.17 (audit 339b6b19 low 2): when the target's 256-block hash window lapses before anyone resolves,
+    /// the event is re-armed to a fresh future block instead of falling back to a seed computable before the epoch.
+    /// The submitted plan stays attached and is applied with the fresh hash.
+    event EventRearmed(uint256 indexed epoch, uint256 target);
+
+    /// @return True when the event is resolved; false when its window lapsed and it was re-armed instead.
+    function resolve(uint256 e) public nonReentrant returns (bool) {
+        return _resolve(e, msg.sender);
     }
 
-    function resolveFor(uint256 e, address keeper) external nonReentrant {
+    function resolveFor(uint256 e, address keeper) external nonReentrant returns (bool) {
         if (msg.sender != address(rewards())) revert Unauthorized();
-        _resolve(e, keeper);
+        return _resolve(e, keeper);
     }
 
-    function _resolve(uint256 e, address keeper) private {
+    function _resolve(uint256 e, address keeper) private returns (bool) {
         uint256 startGas = gasleft();
         EventData storage x = events[e];
-        if (x.resolved) return;
+        if (x.resolved) return true;
         if (x.target == 0 || ChainClock.number() <= x.target) revert TooEarly();
         Plan storage p = plans[e];
         bytes32 h = ChainClock.hash(x.target);
-        // Missing/expired entropy has an explicit fixed, non-rerollable fallback.
-        x.seed = h == bytes32(0)
-            ? keccak256(abi.encode(address(this), e, "fixed fallback"))
-            : keccak256(abi.encode(p.number, h, address(this), e));
-        Kind k = p.submitted && h != bytes32(0) ? p.kind : fallbackKind(e);
-        x.severity = p.submitted && h != bytes32(0) ? p.severity : 10000;
+        if (h == bytes32(0)) {
+            // Never a seed computable before the epoch: re-arm like PackSale/StarterClaim and keep the plan.
+            x.target = uint64(ChainClock.number() + 2);
+            emit EventRearmed(e, x.target);
+            return false;
+        }
+        x.seed = keccak256(abi.encode(p.number, h, address(this), e));
+        Kind k = p.submitted ? p.kind : fallbackKind(e);
+        x.severity = p.submitted ? p.severity : 10000;
         uint256 positives;
         uint256 repeated;
         uint256 first = e > 19 ? e - 19 : 1;
@@ -213,7 +222,7 @@ contract GridOperator is GameModule, ReentrancyGuard {
             k = uint256(x.seed) % 2 == 0 ? Kind.Green : Kind.Cheap;
         }
         if (k >= Kind.Outage && k <= Kind.Audit && repeated >= 4) k = Kind.Calm;
-        if (!p.submitted && h != bytes32(0) && uint256(x.seed) % 10000 < params().get(Params.Key.PositiveWeight)) {
+        if (!p.submitted && uint256(x.seed) % 10000 < params().get(Params.Key.PositiveWeight)) {
             k = uint256(x.seed) >> 16 & 1 == 0 ? Kind.Green : Kind.Cheap;
         }
         uint256[8] memory weights;
@@ -248,6 +257,12 @@ contract GridOperator is GameModule, ReentrancyGuard {
             e, k, x.district, x.severity, x.seed, p.submitted ? p.letter : "Autonomous fallback: the grid continues."
         );
         fees().payWork(keeper, Params.Key.EntropyBounty, 1, startGas - gasleft());
+        return true;
+    }
+
+    /// @notice Block whose hash seeds epoch `e`; moves forward when the window lapses unresolved (v3.17).
+    function eventTarget(uint256 e) external view returns (uint64) {
+        return events[e].target;
     }
 
     function eventAt(uint256 e)

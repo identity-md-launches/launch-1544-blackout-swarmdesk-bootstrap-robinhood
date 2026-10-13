@@ -422,3 +422,68 @@ All four fit the 0.01 ETH ceiling; the largest fits up to about 0.4692 gwei.
 **Docs.** `docs/accepted-v316.md` keeps every v3.15 accepted item, writes 031c93c4 info 5 and info 6 out in full from the audit (`Identity-md/research`, job `031c93c4-9b85-454d-be7d-7537822de932`, `files/AUDIT.md`), and adds the binder-liveness line. The four objectives in `launch-v39.md` carry that list with info 5 and info 6 abridged to the audit's finding statement so each objective stays under the 8,000-character limit (7,021 / 5,993 / 7,048 / 6,554 characters; the file is named as the verbatim source); every x.com link was removed from the runbook and only https://playblackout.xyz remains. `docs/m2-trust-assumption.md` says twins (genuine or foreign token) can no longer bind and that the remaining trust is the binder key, which can only choose among registries that pass every proof. `keeper/README.md` and `keeper/keeper.mjs`: `bind-desk` simulates the bind from `Desk.binder()`, prints the transaction for the binder to sign and never sends it; `bind-router` and `forward` wait until `Desk.registry()` is the wiring registry.
 
 **Operational responsibilities (new in v3.16).** The requester keeps the binder key `0x6d51…d007` available for one transaction right after L3; the keeper prints the calldata (`wire --step bind-desk`), the binder signs and sends it with its own tooling, and the keeper is re-run to verify `Desk.registry()` before `register` continues into `bind-router` and `forward`. If the binder key is lost before binding, the Desk never binds and the endowment stays in the escrow; no owner, rotation or fallback exists. The keeper's `bind-desk` printing path was syntax-checked and its encoder is covered by the `cast` vectors; it was **not** run against a live chain in this job (the rehearsal binds through forge with the binder pranked). Out of scope here, as before: Slither/Mythril, the live attester and schedule services, paid admission and launch-day gas.
+
+## v3.17 — launch-1593 farmDaily port and pre-token audit 339b6b19 (1 medium, 3 low), re-pinned before L2
+
+Source only, based on `15100e6af0893008f2f09d534604dcc6c1e008b4` (v3.16). Nothing was deployed or sent on chain; the fork rehearsal lands only in a local Anvil fork. The protected build configuration and dependencies are unchanged; `src/lib/Robinhood.sol` is untouched. L1 is redeployed for v3.17, so pins were allowed to change and were regenerated with the repository tools.
+
+**Port (first).** `src/FarmRewards.sol` and `test/FarmDailyBasisV317.t.sol` are taken byte-for-byte from `identity-md-launches/launch-1593-blackout-v3-16-l1-robinhood` at `1e4490923f20a389ecb6be136121f4eea65db3b1` (a merge whose tree carries the fix; the diff against 15100e6 is the `FARM_DAILY_DECAY = 96` constant and the `_reward` basis update): a higher settled yield becomes `lastFarmDaily` at once, a lower one decays the previous basis by 1/96 per settled epoch, and a pro-rata entry epoch is scaled by `EPOCH / entrySeconds` to its full-epoch equivalent. The five ported tests pass unchanged.
+
+**Audit 339b6b19 fixes.**
+
+1. *Medium, Enhancement re-roll.* `capture` no longer re-arms an attempt whose 256-block window lapsed. `_lapse` settles it immediately as a failure with the worst outcome its level allows (`worstOutcome(level)`: never a success; targets 1–3 keep the item's level, 4+ lose one, any level with a burn chance burns the item), clears `pending[item]`, and emits `EnhancementLapsed` plus `EnhancementResolved(success = false)`. `capture` is now `external nonReentrant` over a private `_capture` that `resolve` shares, so a lapsed attempt cannot be re-entered. `EnhancementRearmed` is gone. `test/AuditV317.t.sol::testEnhancementRearmGrind` runs every target level 1–8: the lapsed outcome equals the worst outcome, and six different block hashes per level all resolve at least as well (success > keep > drop > burn), so lapsing is never better than resolving. The legacy test in `test/EconomyV35.t.sol` that asserted the re-arm now asserts the lapse.
+2. *Low, GridOperator fallback.* `_resolve` returns `bool`; when the hash window lapsed it re-arms `target` to `number + 2` (`EventRearmed`) and returns `false`, keeping the submitted plan, severity and number for the fresh hash. The fixed fallback seed (`keccak(this, e, "fixed fallback")`) is removed, so no seed computable before the epoch is ever used, with or without a plan; the fixed `fallbackKind` table still decides the kind of an unplanned epoch. `FarmRewards.advanceEpoch` checks the return value first and, when the event was re-armed, emits `EpochCloseDeferred` and returns without touching state, so the epoch closes on the next call once the fresh hash exists. `GridOperator.eventTarget(e)` exposes the current target. Tests: `testSubmittedPlanDiscardedAfterHashWindow`, `testUnplannedLapsedWindowAlsoRearmsAndNeverUsesAPrecomputableSeed`, `testAdvanceEpochDefersUntilTheRearmedEventResolves`; `test/Events.t.sol` and `test/SwarmDeskV37.t.sol` fallback tests updated to the re-arm.
+3. *Low, Economy.unlock while stale.* `unlock` calls `syncFor` only when `_canResync` holds (`live()` and `lastSettled(p) >= settledEpoch()`); otherwise it skips the weight resync and still deletes the lock, fixes the district list and totals, and returns the principal. `boostAt` already reports zero past `end`, and the next owner action re-syncs the weight. Tests: `testUnlockBlockedWhileEpochStale` (stale epoch), `testUnlockWhileBehindReturnsPrincipalAndSkipsResync` (29 epochs behind), `testUnlockLiveAndCaughtUpStillResyncsWeight` (boost removed on the live path; stranger and double unlock still revert `TooEarly`).
+4. *Low, destroyed item keeps weight.* `FarmCore.process` calls `rewards().flagResync(p)` when it removes a destroyed item. `FarmRewards._settle` re-commits the farm from `FarmCore.committedHash(p)` (allocation hash of the loadout with the current boost) as soon as the farm is caught up (`cursor >= settledEpoch`), which takes effect next epoch through the existing bucket accounting, so `nextTotalHash` and the district hash stop counting the item; `setWeight` clears the flag. The commit is deliberately deferred until the farm is caught up because only two weight generations are tracked; `testDestroyedItemResyncWaitsUntilTheFarmIsCaughtUp` shows every settled epoch still balances (`settledHash == raw`). Tests drive the destruction through the engine's real Surge path (`testDestroyedItemWeightStale`, `testOwnerActionClearsThePendingResync`).
+
+**Accepted.** `docs/accepted-v317.md` carries every v3.16 line, 339b6b19 info 5–8 (Civic.claimWar rounding dust, no max-cost bound on openPack/buyTokenPack, unused minter/caller permissions, dead fields) and the L1 judge items (PackSale.buyPacksFor gifting, one-shot escrow, Festival band, Economy._insert 33-tie lock griefing, stream-0 answers before role 1). The four runbook objectives carry the same list abridged (5,465 / 4,437 / 5,492 / 4,998 characters, under the 8,000 limit), keep the eight Desk words and the binder `0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007`, and contain no x.com link.
+
+**Creation hashes (all 19 regenerated, `artifacts/v317/launch-creation-hashes.txt`, `out/` and `out-launch/` identical).** Nine changed, ten did not.
+
+| Contract | v3.17 creation hash | Changed? |
+|---|---|---|
+| SwarmDesk | `0x1d8e1afa90ba7a4c436fa2406f52743c97f7e6d9add372516144cadcb0795879` | yes (SwarmCode pins) |
+| EndowmentEscrow | `0xe7a48446223ad53d50a9a9372c5552b70fb94e4f03c0f9f45298f7e5d2036368` | yes (SwarmCode/ModuleCode pins) |
+| V4Market | `0x17e05386811fe526f0f44b95338a881b74127920e0f0587dbd1f798028b09931` | yes (GameRegistry/ModuleCode pins; `launch/V4Market.sol` re-flattened) |
+| Params | `0x26c9f36af040b02eba9644f52daeed84fae4e42eab9bdb23277d0bb28c6dc6c0` | no |
+| GameRegistry | `0xe41104da4edfb9a746e9080ce7b1885b5fe7609674a3a68fc5addbfd5a871531` | yes (ModuleCode pins) |
+| RewardPool | `0xecf3ae5ebb791318703b5e79960cfd243b7d89bdffa0e0501bee5146623764de` | no |
+| FarmRewards | `0xfa1a4087722916aeefae66aaf3400299a5e4cb8f4fc8e516a17cec7754e07506` | yes (port, deferral, resync; runtime 17,002) |
+| FarmCore | `0xc390b07ef7a9ab65bef3a1ec3b39c1a16e117543c9565fedc9342526aa57aa47` | yes (flagResync, committedHash; runtime 22,361) |
+| FarmItems | `0x98f7224201d9e7e3d16bd8996c29a522cac5bd1b375181de8cfdc2c6b9639e76` | no |
+| PackSale | `0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737a` | no |
+| StarterClaim | `0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90` | no |
+| FeeRouter | `0x3b53c8d89f2836c0744007bac7e168e6c66dd19eaf4a74b2eadd5161ad12e6af` | no |
+| GridOperator | `0x931bdfaeeacadb7c8014ce1411671d0045013c2b373d95bbf0bb83dfce0b7c74` | yes (re-arm; runtime 9,519) |
+| Season | `0xa79fdfbecdb2450bc94c1cedac7618b1f4244fe63c3f1bc6fea784f82cd42c83` | no |
+| FarmEngine | `0x48a9f8dd8c707a2a8c6b4a1838640be765a3e3c9d2306680bda5ce679b6dbe7c` | no |
+| Economy | `0x105f9f29d79579fa33ff8e11d4d86847dd7d9f59bd681500553a3844db50ccc9` | yes (unlock; runtime 11,097) |
+| Enhancement | `0x31242676dd3a728a2ad32a5cb300166020e87831b0f547756fa0bab88cedea38` | yes (lapse; runtime 7,112) |
+| Civic | `0xb3e89ec00b8ad51904cdac336644a6025ceea25c15fa931cac2ad13d89dc0bb2` | no |
+| Billboards | `0x3cb8b542f7baa025b6db7f2a4864288a594d05e75b9b4e9ec66416c1fe52aa60` | no |
+
+`launch-v39.md` (table and all four objectives) and `docs/launch-v314-plan.json` (version 3.17, file name kept because the tools default to it) carry these hashes; the constructor words are unchanged.
+
+| Check | Result |
+|---|---|
+| `forge build` (repo profile = launch profile) | passes; all 19 creation codes identical in `out/` and `out-launch/`; every runtime under EIP-170 (largest FarmCore 22,361) |
+| `forge test` | **315 passed, 0 failed, 6 skipped** in 54 suites (`artifacts/v317/forge-test.txt`); skips are the five rehearsal tests offline and the optional RPC-only test |
+| `forge fmt --check` | clean (`artifacts/v317/forge-fmt.txt`) |
+| `tools/pin_module_code.py --check`, `tools/pin_swarm_code.py --check` | pass (`artifacts/v317/*-pins-check.txt`) |
+| `node tools/check_deploy_gate.mjs` | PASS, 19 constructors (`artifacts/v317/deploy-gate.txt`) |
+| `tools/check_v37_authority.py` | passes after updating its constructor assertion to the eight-word Desk (it had asserted seven words since v3.16 and failed at 15100e6) |
+| Node tests (`test/*.test.mjs`), Python tests | all pass, 34 Python tests (`artifacts/v317/node-tests.txt`, `python-tests.txt`) |
+| Fork rehearsal `tools/rehearse_v311.sh https://robinhood.drpc.org artifacts/v317/rehearsal.log` | **5 passed, 0 failed** at anvil fork block **87728112**, basefee 20,148,000 wei: L1 (777001) deployed the eight-word Desk and escrow, non-binder senders refused `Unauthorized`, the binder's bind set `tokenLaunch() == 777002` with the real `LaunchFactory.positionOf(777002)` record, the fake-market registry (777005) refused, roles 0–13 verified, `bindFeeRouter`, `forward` and the first pack entropy completed |
+
+| Launch (fork) | Measured factory-call gas |
+|---|---:|
+| L1 Desk + escrow | 6,952,280 |
+| L2 token + hook | 7,089,377 |
+| L3 job A | 21,628,498 |
+| L4 job B | 19,828,437 |
+
+All four stay under the 0.01 ETH ceiling at the fork basefee.
+
+**Assumptions and deployment parameters.** Constructor words are exactly those of v3.16 (eight Desk words with the binder last, escrow `$contract:SwarmDesk`, hook seven words, Params three, GameRegistry seven, every module `$contract:GameRegistry` or `<L3_GAME_REGISTRY>`); only the creation hashes above changed. `FARM_DAILY_DECAY = 96` is a constant (about 4% a day). An enhancement attempt that is not captured within 256 blocks of its target now loses by rule; the UI and keeper should capture promptly, as they already do for packs. A grid event whose window lapses needs a second transaction at least two blocks later; `advanceEpoch` is a no-op-with-re-arm until then and pays no bounty for that call.
+
+**Operational responsibilities (new in v3.17).** The keeper's epoch pass must treat an `EpochCloseDeferred` / `EventRearmed` log as "retry `GridOperator.resolve(epoch)` or `advanceEpoch()` within the new 256-block window" (`keeper/README.md`). The keeper keeps capturing enhancement attempts inside their window; a lapsed one needs no further action beyond the first `capture`/`resolve` that settles it. Settlement remains permissionless; anyone settling a farm whose item was destroyed triggers its weight resync. Players unlocking an expired lock while the game is stale get their principal without a resync and should `sync()` once caught up. The binder key `0x6d51…d007` is still required once, right after L3, with the v3.17 artifacts.

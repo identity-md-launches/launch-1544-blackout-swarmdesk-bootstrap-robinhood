@@ -185,7 +185,8 @@ contract EconomyV35Test is BaseTest {
         assertGe(d.pool.reserved(), d.rewards.pending(alice) + d.rewards.pending(bob));
     }
 
-    function testEnhanceCommitCannotPlaceScrapOrRetryAndCanRearm() public {
+    /// @dev v3.17 (audit 339b6b19 medium): a lapsed window settles the attempt as its worst outcome, never re-arms.
+    function testEnhanceCommitCannotPlaceScrapOrRetryAndLapsesAsWorstOutcome() public {
         uint256 item = mintItem(alice, 0, 0);
         uint256 cost = d.economy.enhanceQuote(item);
         vm.prank(alice);
@@ -202,17 +203,25 @@ contract EconomyV35Test is BaseTest {
         d.enhancement.commit(item, cost, true);
         vm.roll(vm.getBlockNumber() + 300);
         d.enhancement.resolve(id);
-        assertEq(d.enhancement.pending(item), id);
+        assertEq(d.enhancement.pending(item), 0, "lapsed: settled as a failure, item free again");
+        assertEq(d.items.data(item).overclock, 0, "level 1 keeps its level on failure");
+        assertEq(d.items.data(item).holder, alice);
+        (,,,, bytes32 seed, bool captured, bool resolved) = d.enhancement.attempts(id);
+        assertEq(seed, bytes32(0));
+        assertTrue(captured && resolved);
+        vm.expectRevert(InvalidValue.selector);
+        d.enhancement.resolve(id);
+        // A fresh attempt inside the window still captures and resolves on the real hash.
+        vm.prank(alice);
+        id = d.enhancement.commit(item, cost, true);
         entropy();
         d.enhancement.capture(id);
-        (,,,, bytes32 seed, bool captured,) = d.enhancement.attempts(id);
+        (,,,, seed, captured,) = d.enhancement.attempts(id);
         assertTrue(captured);
         vm.roll(vm.getBlockNumber() + 300);
         d.enhancement.resolve(id);
         assertEq(d.enhancement.pending(item), 0);
         assertEq(d.items.data(item).overclock, uint256(seed) % 100 < 95 ? 1 : 0);
-        vm.expectRevert(InvalidValue.selector);
-        d.enhancement.resolve(id);
     }
 
     function testEnhanceBurnFailureAndLevelGate() public {

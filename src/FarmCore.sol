@@ -542,10 +542,23 @@ contract FarmCore is GameModule, ReentrancyGuard, IERC1155Receiver {
         productive = productive * (10000 + f.activeBoost) / 10000;
         power = power * (10000 + f.activeBoost) / 10000;
         f.theftUntil = f.cableRepairedEpoch == e && theftUntil == f.activeTheftUntil ? 0 : theftUntil;
+        bool removed;
         for (uint256 i; i < 24; ++i) {
             uint256 id = f.active[i];
-            if (id != 0 && items().data(id).holder == address(0)) _remove(f, id);
+            if (id != 0 && items().data(id).holder == address(0)) {
+                _remove(f, id);
+                removed = true;
+            }
         }
+        // v3.17 (audit 339b6b19 low 4): a destroyed item leaves the committed weight at the next epoch. Rewards
+        // re-commits `committedHash` once this farm is caught up, so global and district hash stop counting it.
+        if (removed) rewards().flagResync(p);
+    }
+
+    /// @notice The weight a loadout sync would commit now: allocation hash of the loadout with the current boost.
+    function committedHash(address p) external view returns (uint256) {
+        Farm storage f = farms[p];
+        return engine().allocationHash(f.loadout, f.paid != 0) * (10000 + _boost(p, block.timestamp)) / 10000;
     }
 
     function _remove(Farm storage f, uint256 id) private {

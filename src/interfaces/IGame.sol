@@ -23,6 +23,7 @@ interface IRewards {
     function scrap(address p, uint256 hash, uint256 minimum) external returns (uint256);
     function recordSales(uint256 count) external;
     function setReferrer(address p, address ref) external;
+    function flagResync(address p) external;
     function seasonReady(uint256 week) external view returns (bool);
     function award(address p, uint256 amount) external;
     function releasePrize(uint256 amount) external;
@@ -38,6 +39,7 @@ interface ICore {
     function register(address p) external;
     function paidPackBought(address p, uint256 n, uint256 ethValue) external;
     function process(address p, uint256 epoch) external returns (uint256 raw, uint256 productive, uint256 power);
+    function committedHash(address p) external view returns (uint256);
     function grantDrop(address p, bytes32 seed) external;
     function activity(address p, uint256 e, uint256 gross, uint256 net) external;
 }
