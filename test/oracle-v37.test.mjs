@@ -8,9 +8,10 @@ const vectors=JSON.parse(readFileSync('test/fixtures/oracle-hash-vectors.json','
 for(const v of vectors)assert.equal(oracleQuestionHash(v.body),v.questionHash);
 const config=JSON.parse(readFileSync('docs/oracle-v37/oracle-config.json','utf8'));
 // Local encoder fixtures only: never a production launch configuration.
-const binding={factory:'0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e',registryLaunch:'0',registryIndex:0,paramsLaunch:'0',paramsIndex:0,heartbeatBps:200,heartbeatCap:'1000000000000000000',gameConfigHash:keccak256(utf8('fixture'))};
+const binding={factory:'0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e',registryLaunch:'0',registryIndex:0,paramsLaunch:'0',paramsIndex:0,heartbeatBps:200,heartbeatCap:'1000000000000000000',gameConfigHash:keccak256(utf8('fixture')),binder:'0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007'};
 const constructorArgs=swarmConstructorArgs(config,binding);
-assert.equal(constructorArgs.length,7);assert.equal(constructorArgs.map(word).join('').length,7*64);
+assert.equal(constructorArgs.length,8);assert.equal(constructorArgs.map(word).join('').length,8*64);
+assert.equal(constructorArgs[7],binding.binder);assert.throws(()=>swarmConstructorArgs(config,{...binding,binder:'0x'+'0'.repeat(40)}));
 // v3.9 policy word: chainId[0:32] | fromBlock[32:80] | toBlock[80:128] | maxPrice[128:224] | heartbeatBps[224:240].
 const policy=BigInt(constructorArgs[1]),m32=(1n<<32n)-1n,m48=(1n<<48n)-1n,m96=(1n<<96n)-1n;
 assert.equal(policy&m32,1n);assert.equal((policy>>32n)&m48,26122900n);assert.equal((policy>>80n)&m48,26122901n);
@@ -38,4 +39,4 @@ for(const [i,name]of ['event','regulator'].entries()) {
 }
 assert.throws(()=>bytesCall('execute(uint8,bytes)',0,'0xzz'));
 assert.throws(()=>oracleQuestionHash({...vectors[0].body,window:{hours:6}}));
-console.log(`${vectors.length} independent protocol hash vectors; commitments, seven-word constructor packing, field limits, dynamic keeper ABI and log recovery passed.`);
+console.log(`${vectors.length} independent protocol hash vectors; commitments, eight-word constructor packing (v3.16 binder), field limits, dynamic keeper ABI and log recovery passed.`);

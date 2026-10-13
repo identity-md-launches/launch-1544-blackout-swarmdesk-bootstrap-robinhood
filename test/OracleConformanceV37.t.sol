@@ -8,7 +8,14 @@ import {OracleAttestation} from "../src/oracle/OracleAttestation.sol";
 contract SwarmVectorHarness is SwarmDesk {
     constructor(OracleConfig memory o, BindingConfig memory b)
         SwarmDesk(
-            o.action, SwarmArgs.policy(o, b), o.questions[0], o.questions[1], o.bodies[0], o.bodies[1], b.gameConfigHash
+            o.action,
+            SwarmArgs.policy(o, b),
+            o.questions[0],
+            o.questions[1],
+            o.bodies[0],
+            o.bodies[1],
+            b.gameConfigHash,
+            msg.sender
         )
     {
         _setOracleSigner(o.signer);

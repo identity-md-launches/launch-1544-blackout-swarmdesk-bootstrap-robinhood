@@ -31,7 +31,7 @@ sent through `eth_sendRawTransaction`; the keeper waits for the receipt and logs
 ```sh
 node keeper.mjs wire --wiring /etc/blackout/wiring.json --dry-run --env /etc/blackout/keeper.env   # simulate every step
 node keeper.mjs wire --wiring /etc/blackout/wiring.json --env /etc/blackout/keeper.env             # send what is due, in order
-node keeper.mjs wire --wiring ... --step bind-desk                                                 # one step only
+node keeper.mjs wire --wiring ... --step bind-desk                                                 # print the bind calldata for the binder (never sent)
 ```
 
 `wiring.json` (template: `keeper/wiring.example.json`) holds the recorded addresses and launch numbers from
@@ -41,15 +41,16 @@ with their contract lists in manifest order) and the artifact directories to rea
 chain accepts is used, and a wrong artifact only fails the simulation). The steps run in this order and each is
 idempotent (already-done steps are reported and skipped):
 
-1. **`bind-desk`** — right after job A is recorded: `SwarmDesk.bind(registry, registryCode, paramsCode, launchA, registryIndex, launchA, paramsIndex, tokenLaunch)`. Since v3.15 the last word is the **L2 token launch number** (`wiring.tokenLaunch`): the Desk reads `LaunchFactory.positionOf(tokenLaunch)` and refuses a registry whose market is not the hook that record names for the registry's token, so the step fails closed if `tokenLaunch` is missing. The command then **reads `Desk.registry()` and stops with an error if it is not the wiring registry**: a twin registry launched through the factory before this call could otherwise have captured the Desk. Do not forward the endowment in that case.
+1. **`bind-desk`** — right after job A is recorded. **v3.16: the keeper never sends this call.** `SwarmDesk.bind` reverts `Unauthorized` for every caller except the Desk's pinned `binder` (the project wallet `0x6d51…d007`, the Desk's eighth constructor word), so the step reads `Desk.binder()`, builds `bind(registry, registryCode, paramsCode, launchA, registryIndex, launchA, paramsIndex, tokenLaunch)`, simulates it with `from: binder` for each artifact toolchain and **prints the transaction (from, to, value 0, chainId, estimated gas, data) for the binder wallet to sign and send** with its own tooling (hardware wallet, `cast send --from`, etc.). The last word is the **L2 token launch number** (`wiring.tokenLaunch`): the Desk reads `LaunchFactory.positionOf(tokenLaunch)` and refuses a registry whose market is not the hook that record names for the registry's token, so the step fails closed if `tokenLaunch` is missing or the simulation from the binder reverts. Once the binder's transaction confirms, re-run `wire`: the step then **reads `Desk.registry()` and stops with an error if it is not the wiring registry**. `bind-router` and `forward` are reported as not due until the Desk is bound to the wiring registry. The keeper key is never the binder; if it happens to be, the step still only prints.
 2. **`register`** — `GameRegistry.register(role, launch, index, creationCode)` for every role whose job is recorded (A's six modules first, B's eight once job B exists).
 3. **`bind-router`** — `V4Market.bindFeeRouter(FeeRouter, launchA, registryIndex)` once role 6 is registered.
 4. **`forward`** — `EndowmentEscrow.forward(registry, launchA, registryIndex, registryCode, launchA, poolIndex, poolCode)` once role 0 is registered and the Desk is bound.
 5. **`fund`** — `RewardPool.fundEndowment()`.
 6. **`claim-fees`** — `LaunchFactory.claimFees(tokenLaunch)`; afterwards the run loop repeats it periodically.
 
-Run `wire` once after job A (steps 1-2 for A), again after job B (the rest). Anyone can send these; the
-keeper key only pays gas. The whole sequence was exercised against the local fixture graph in `forge test`
+Run `wire` once after job A (step 1 prints the bind for the binder; step 2 registers A's modules), again after
+the binder has bound and after job B (the rest). Steps 2–6 are permissionless and the keeper key only pays gas;
+step 1 is the binder's transaction and is only printed here. The whole sequence was exercised against the local fixture graph in `forge test`
 (the same calldata encoders are checked byte-for-byte against `cast calldata` in `test/keeper-v39.test.mjs`);
 it was **not** run against a live chain in this job.
 
@@ -92,7 +93,9 @@ ids and the last claim time; deleting it is safe (the keeper rescans and skips c
 
 ## Before launch
 
-- Run `wire --dry-run` against the recorded addresses: every step must simulate or report "already".
+- Run `wire --dry-run` against the recorded addresses: every step must simulate or report "already"; `bind-desk`
+  must simulate from `Desk.binder()` and print the calldata (it is never sent by the keeper), and after the binder
+  sends it the step must report `already bound to <REGISTRY>`.
 - Run `status` against the registry after wiring: it must list all fourteen modules, show the Desk bound to
   the registry and every phase as `disabled`.
 - Keep one keeper per key (nonces are read from the node; two instances on one key would collide). A second

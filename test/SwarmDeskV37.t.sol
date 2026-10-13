@@ -325,6 +325,10 @@ contract SwarmDeskV37Test is BaseTest {
         assertFalse(ok);
         (ok,) = address(desk).call(abi.encodeWithSignature("execute(address,bytes)", address(d.params), bytes("")));
         assertFalse(ok);
+        // v3.16: bind is the pinned binder's call; anyone else is refused before AlreadyDone.
+        vm.expectRevert(Unauthorized.selector);
+        desk.bind(address(d.registry), "", "", 1, 1, 1, 0, fixtureTokenLaunch);
+        vm.prank(desk.binder());
         vm.expectRevert(AlreadyDone.selector);
         desk.bind(address(d.registry), "", "", 1, 1, 1, 0, fixtureTokenLaunch);
     }
@@ -408,7 +412,10 @@ contract SwarmDeskV37Test is BaseTest {
             b.registryIndex = 0;
             b.paramsLaunch = 0;
             b.paramsIndex = 0;
-            fresh = SwarmDesk(deployCode("SwarmDesk.sol:SwarmDesk", SwarmArgs.encode(desk.oracleConfig(), b)));
+            fresh = SwarmDesk(
+                deployCode("SwarmDesk.sol:SwarmDesk", SwarmArgs.encode(desk.oracleConfig(), b, address(this)))
+            );
+            assertEq(fresh.binder(), address(this));
             assertEq(keccak256(abi.encode(fresh.oracleConfig())), keccak256(abi.encode(desk.oracleConfig())));
             assertEq(keccak256(abi.encode(fresh.bindingConfig())), keccak256(abi.encode(b)));
             assertEq(address(fresh.registry()), address(0));
@@ -447,7 +454,11 @@ contract SwarmDeskV37Test is BaseTest {
         vm.expectRevert(InvalidValue.selector);
         fresh.bind(address(r), rCode, pCode, 0, 1, 51, 0, fixtureTokenLaunch);
         market.configureBinding(address(fresh), fresh.bindingConfig().gameConfigHash);
+        // v3.16: a correct proof from anyone but the pinned binder is refused.
         vm.prank(bob);
+        vm.expectRevert(Unauthorized.selector);
+        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0, fixtureTokenLaunch);
+        assertEq(address(fresh.registry()), address(0));
         fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0, fixtureTokenLaunch);
         assertEq(address(fresh.registry()), address(r));
         assertEq(fresh.bindingConfig().registryLaunch, 51);
@@ -486,11 +497,20 @@ contract SwarmDeskV37Test is BaseTest {
         require(addr != address(0), "create");
     }
 
+    /// @dev External wrapper so the encoder's own revert can be expected.
+    function encodeWith(SwarmDesk.OracleConfig memory o, SwarmDesk.BindingConfig memory b, address binder)
+        external
+        pure
+        returns (bytes memory)
+    {
+        return SwarmArgs.encode(o, b, binder);
+    }
+
     /// @dev Helper target for the stale-coordinate check: the encoder itself must refuse coordinates.
     function encodeStale(address factory) external view returns (bytes memory) {
         SwarmDesk.BindingConfig memory b = desk.bindingConfig();
         b.factory = factory;
-        return SwarmArgs.encode(desk.oracleConfig(), b);
+        return SwarmArgs.encode(desk.oracleConfig(), b, address(this));
     }
 
     function testFlatConstructorRejectsUnusedPackedBits() public {
@@ -500,8 +520,8 @@ contract SwarmDeskV37Test is BaseTest {
         b.registryIndex = 0;
         b.paramsLaunch = 0;
         b.paramsIndex = 0;
-        bytes memory args = SwarmArgs.encode(o, b);
-        assertEq(args.length, 7 * 32);
+        bytes memory args = SwarmArgs.encode(o, b, team);
+        assertEq(args.length, 8 * 32);
         bytes memory code = vm.getCode("SwarmDesk.sol:SwarmDesk");
         LocalApplicationFactory f = LocalApplicationFactory(address(d.registry.factory()));
         // Word 1 is the packed policy word; bits 240-255 are reserved and must be zero.
@@ -509,13 +529,21 @@ contract SwarmDeskV37Test is BaseTest {
         assembly ("memory-safe") { mstore(add(args, 64), badPolicy) }
         vm.expectRevert(InvalidValue.selector);
         f.deploy(5, 0, bytes.concat(code, args));
-        args = SwarmArgs.encode(o, b);
+        args = SwarmArgs.encode(o, b, team);
         badPolicy = SwarmArgs.policy(o, b) | (uint256(1) << 255);
         assembly ("memory-safe") { mstore(add(args, 64), badPolicy) }
         vm.expectRevert(InvalidValue.selector);
         f.deploy(5, 0, bytes.concat(code, args));
+        // v3.16: word 8 is the binder; zero reverts at construction (the encoder refuses it too).
+        args = SwarmArgs.encode(o, b, team);
+        assembly ("memory-safe") { mstore(add(args, 256), 0) }
+        vm.expectRevert(InvalidValue.selector);
+        f.deploy(5, 0, bytes.concat(code, args));
+        vm.expectRevert(InvalidValue.selector);
+        this.encodeWith(o, b, address(0));
         // The round trip of the packed word reproduces every configured value.
-        SwarmDesk fresh = SwarmDesk(f.deploy(5, 0, bytes.concat(code, SwarmArgs.encode(o, b))));
+        SwarmDesk fresh = SwarmDesk(f.deploy(5, 0, bytes.concat(code, SwarmArgs.encode(o, b, team))));
+        assertEq(fresh.binder(), team);
         SwarmDesk.OracleConfig memory got = fresh.oracleConfig();
         assertEq(got.questionChain, o.questionChain);
         assertEq(got.fromBlock, o.fromBlock);

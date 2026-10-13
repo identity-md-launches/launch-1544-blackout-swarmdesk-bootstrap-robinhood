@@ -95,6 +95,8 @@ contract EndowmentEscrowV38Test is BaseTest {
         pool = RewardPool(f.deploy(22, 0, bytes.concat(poolCode, abi.encode(address(r)))));
         r.register(0, 22, 0, poolCode);
         market.configureBinding(fresh, configHash);
+        uint64 tokenLaunch_ = desk.tokenLaunch();
+        vm.prank(team); // v3.16: only the pinned binder may bind
         (bool ok, bytes memory reason) = fresh.call(
             abi.encodeWithSignature(
                 "bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)",
@@ -105,7 +107,7 @@ contract EndowmentEscrowV38Test is BaseTest {
                 uint8(1),
                 uint64(21),
                 uint8(0),
-                desk.tokenLaunch()
+                tokenLaunch_
             )
         );
         if (gameToken == address(token)) {
@@ -189,11 +191,10 @@ contract EndowmentEscrowV38Test is BaseTest {
         escrow.forward(address(d.registry), 1, 1, registryCode, 1, 2, poolCode);
     }
 
-    /// @dev Re-encode the fixture Desk's oracle configuration through the canonical twelve-word encoder.
+    /// @dev Re-encode the fixture Desk's oracle configuration through the canonical eight-word encoder (binder: team).
     function _deskWords(address factory, bytes32 configHash) private view returns (bytes memory) {
-        return
-            SwarmArgs.encode(
-                desk.oracleConfig(), SwarmDesk.BindingConfig(factory, 0, 0, 0, 0, configHash, 200, 1 ether)
-            );
+        return SwarmArgs.encode(
+            desk.oracleConfig(), SwarmDesk.BindingConfig(factory, 0, 0, 0, 0, configHash, 200, 1 ether), team
+        );
     }
 }

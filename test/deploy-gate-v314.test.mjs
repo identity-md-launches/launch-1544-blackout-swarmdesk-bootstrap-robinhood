@@ -28,8 +28,15 @@ test('allowed platform references pass; empty plans fail closed',()=>{
 });
 test('Desk launch words match the offline encoder and reject endpoint drift',()=>{
   const o=JSON.parse(readFileSync(new URL('../docs/oracle-v37/oracle-config.json',import.meta.url)));
-  const b={factory:protocolAddresses.ProjectFactory,heartbeatBps:200,heartbeatCap:'1000000000000000000',gameConfigHash:plan.gameConfigHash};
-  assert.deepEqual(swarmConstructorArgs(o,b),plan.launches[0].contracts[0].constructorArgs);
+  const binder='0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007'; // v3.16 word 8: the project wallet, not a protocol address
+  const b={factory:protocolAddresses.ProjectFactory,heartbeatBps:200,heartbeatCap:'1000000000000000000',gameConfigHash:plan.gameConfigHash,binder};
+  const words=swarmConstructorArgs(o,b);
+  assert.equal(words.length,8);
+  assert.deepEqual(words,plan.launches[0].contracts[0].constructorArgs);
+  assert.equal(words[7],binder);
+  assert.throws(()=>swarmConstructorArgs(o,{...b,binder:undefined}),/binder is required/);
+  assert.throws(()=>swarmConstructorArgs(o,{...b,binder:'0x'+'0'.repeat(40)}),/Invalid binder/);
+  assert.throws(()=>swarmConstructorArgs(o,{...b,binder:protocolAddresses.LaunchFactory}),/protocol address/);
   assert.throws(()=>swarmConstructorArgs({...o,signer:protocolAddresses.Intake},b),/Fixed Robinhood/);
   assert.throws(()=>swarmConstructorArgs(o,{...b,factory:protocolAddresses.LaunchFactory}),/Fixed Robinhood/);
 });

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Offline packing for the launcher's seven-word SwarmDesk constructor (v3.14). No RPC or signing.
+// Offline packing for the launcher's eight-word SwarmDesk constructor (v3.14 policy word, v3.16 binder). No RPC or signing.
+// Word 8 is the binder: the project wallet that signs the one bind call. It must be a nonzero address and never an IMD protocol address.
 // policyWord = chainId[0:32] | fromBlock[32:80] | toBlock[80:128] | maxPrice[128:224] | heartbeatBps[224:240].
 import {protocolAddresses} from './check_deploy_gate.mjs';
 import {readFileSync} from 'node:fs';
@@ -30,6 +31,14 @@ export function policyWord(o,b) {
   if(bps<200n||bps>5000n||BigInt(b.heartbeatCap)!==10n**18n)throw Error('Invalid heartbeat configuration');
   return chain|(from<<32n)|(to<<80n)|(price<<128n)|(bps<<224n);
 }
+export function binderWord(b) {
+  if(b.binder===undefined||b.binder===null)throw Error('binder is required (v3.16): the project wallet that signs bind');
+  const value=address(b.binder,'binder');
+  for (const [name,fixed] of Object.entries(protocolAddresses)) {
+    if(value.toLowerCase()===fixed) throw Error(`binder must not be an IMD protocol address (${name})`);
+  }
+  return value;
+}
 export function swarmConstructorArgs(o,b) {
   if(o.intake.toLowerCase()===o.delivery.toLowerCase())throw Error('Duplicate callback endpoints');
   if(o.questions[0].toLowerCase()===o.questions[1].toLowerCase())throw Error('Duplicate question commitments');
@@ -39,7 +48,7 @@ export function swarmConstructorArgs(o,b) {
   if(address(b.factory,'factory').toLowerCase()!==protocolAddresses.ProjectFactory) throw Error('Fixed Robinhood ProjectFactory');
   return [hash(o.action,'action'),policyWord(o,b).toString(),
     hash(o.questions[0],'eventQuestion'),hash(o.questions[1],'regulatorQuestion'),hash(o.bodies[0],'eventBody'),hash(o.bodies[1],'regulatorBody'),
-    hash(b.gameConfigHash,'gameConfigHash')];
+    hash(b.gameConfigHash,'gameConfigHash'),binderWord(b)];
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
   if(process.argv.length!==4)throw Error('Usage: node tools/swarm_constructor_args.mjs oracle-config.json approved-binding.json');

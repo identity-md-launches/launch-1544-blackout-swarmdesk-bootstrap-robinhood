@@ -8,6 +8,8 @@
 //   node keeper.mjs wire --wiring FILE [--step STEP] [--dry-run]
 //                                     post-launch wiring in order: bind-desk, register, bind-router,
 //                                     forward, fund, claim-fees (see keeper/README.md, keeper/wiring.example.json)
+//                                     v3.16: bind-desk never sends; it simulates SwarmDesk.bind from the Desk's
+//                                     pinned binder and prints the calldata for that wallet to sign.
 //   node keeper.mjs relay --request UUID [--dry-run]
 //                                     relay one attested oracle answer to SwarmDesk.submit
 //   node keeper.mjs ask-backup --stream event|regulator [--body PATH] [--dry-run]
@@ -396,21 +398,22 @@ async function wire() {
   if (!registryCo || !paramsCo) throw new Error('jobA.launch is required: wiring starts right after job A is recorded');
   const registryCodes = creationCodes(w, 'GameRegistry'), paramsCodes = creationCodes(w, 'Params');
 
-  // 1. Desk.bind immediately after job A, then verify Desk.registry() before anything else.
+  // 1. Desk.bind right after job A. v3.16: only the Desk's pinned binder (the project wallet) may call it, so the
+  //    keeper key never sends this step. It simulates the call from the binder and prints the calldata to sign.
+  //    Steps that need the Desk bound (bind-router, forward) wait until Desk.registry() is the wiring registry.
+  let deskBound = await addr(w.desk, 'registry()');
   if (run('bind-desk')) {
-    const bound = await addr(w.desk, 'registry()');
-    if (same(bound, ZERO)) {
+    if (same(deskBound, ZERO)) {
       if (!w.tokenLaunch) throw new Error('wiring.tokenLaunch (the L2 token launch number) is required: v3.15 bind proves the hook against LaunchFactory.positionOf');
-      const r = await attemptWithCode('SwarmDesk.bind', w.desk, 'bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)', {
-        codes: registryCodes.map((rc, i) => ({ dir: rc.dir, code: [rc.code, (paramsCodes[i] || paramsCodes[0]).code] })),
-        args: ([rCode, pCode]) => [registry, rCode, pCode, registryCo.launch, registryCo.index, paramsCo.launch, paramsCo.index, BigInt(w.tokenLaunch)],
-      });
+      const r = await bindCalldata(w, registry, registryCodes, paramsCodes, registryCo, paramsCo);
       report.push(r);
-      if (!r.ok) { print(report); throw new Error(`Desk.bind failed: ${r.reason}. Do not continue wiring.`); }
-    } else report.push({ label: 'SwarmDesk.bind', ok: true, skipped: `already bound to ${bound}` });
-    const after = dryRun ? (same(bound, ZERO) ? registry : bound) : await addr(w.desk, 'registry()');
-    if (!same(after, registry)) { print(report); throw new Error(`STOP: Desk.registry() is ${after}, not ${registry}. A twin registry captured the Desk; do not forward the endowment.`); }
-    report.push({ label: 'Desk.registry() check', ok: true, registry: after });
+      if (!r.ok) { print(report); throw new Error(`Desk.bind does not simulate from the binder: ${r.reason}. Do not continue wiring.`); }
+      report.push({ label: 'Desk.registry() check', ok: false, reason: 'unbound until the binder sends the printed transaction' });
+    } else {
+      report.push({ label: 'SwarmDesk.bind', ok: true, skipped: `already bound to ${deskBound}` });
+      if (!same(deskBound, registry)) { print(report); throw new Error(`STOP: Desk.registry() is ${deskBound}, not ${registry}. The Desk is bound to another registry; do not forward the endowment.`); }
+      report.push({ label: 'Desk.registry() check', ok: true, registry: deskBound });
+    }
   }
   // 2. Register every role whose job is recorded (A first, then B).
   if (run('register')) {
@@ -425,7 +428,8 @@ async function wire() {
     }
   }
   // 3. Hook <- FeeRouter (needs role 6 registered and the Desk bound).
-  if (run('bind-router')) {
+  if (run('bind-router') && !same(deskBound, registry)) report.push({ label: 'V4Market.bindFeeRouter', ok: false, reason: `Desk.registry() is ${deskBound}; the binder has not bound ${registry} yet` });
+  else if (run('bind-router')) {
     const hook = await addr(registry, 'market()');
     const router = await addr(registry, 'registeredModule(uint256)', [6]);
     const boundRouter = await addr(hook, 'fees()');
@@ -436,6 +440,7 @@ async function wire() {
   // 4. Escrow -> RewardPool (needs role 0 registered, the Desk bound to this registry).
   if (run('forward')) {
     if (!/^0x[0-9a-fA-F]{40}$/.test(w.escrow || '')) report.push({ label: 'EndowmentEscrow.forward', ok: false, reason: 'wiring.escrow missing' });
+    else if (!same(deskBound, registry)) report.push({ label: 'EndowmentEscrow.forward', ok: false, reason: `Desk.registry() is ${deskBound}; never forward before the binder has bound ${registry}` });
     else if ((await uint(w.escrow, 'forwarded()')) === 1n) report.push({ label: 'EndowmentEscrow.forward', ok: true, skipped: 'already forwarded' });
     else {
       const poolCo = coordinate(w, 'RewardPool');
@@ -459,6 +464,41 @@ async function wire() {
     else report.push(await attempt(`LaunchFactory.claimFees(${w.tokenLaunch})`, w.launchFactory, null, [], encodeFunction('claimFees(uint64)', [BigInt(w.tokenLaunch)])));
   }
   print(report);
+}
+/// v3.16: SwarmDesk.bind is restricted to the Desk's pinned binder. Build the calldata, simulate it with
+/// `from: binder` for each artifact toolchain, and print the first that simulates; nothing is sent from this key.
+function bindArgs(w, registry, rCode, pCode, registryCo, paramsCo) {
+  return [registry, rCode, pCode, registryCo.launch, registryCo.index, paramsCo.launch, paramsCo.index, BigInt(w.tokenLaunch)];
+}
+const BIND_SIGNATURE = 'bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)';
+async function bindCalldata(w, registry, registryCodes, paramsCodes, registryCo, paramsCo) {
+  const binder = await addr(w.desk, 'binder()');
+  if (same(binder, ZERO)) return { label: 'SwarmDesk.bind', ok: false, reason: 'Desk.binder() is zero: not a v3.16 Desk' };
+  if (keeper && same(binder, keeper)) log('note: the keeper key is the binder; still not sending, sign the printed calldata deliberately');
+  const chainId = CHAIN ?? Number(BigInt(await rpc('eth_chainId')));
+  let last = 'no artifact';
+  for (const [i, rc] of registryCodes.entries()) {
+    const pc = (paramsCodes[i] || paramsCodes[0]).code;
+    const data = encodeFunction(BIND_SIGNATURE, bindArgs(w, registry, rc.code, pc, registryCo, paramsCo));
+    try {
+      await rpc('eth_call', [{ from: binder, to: w.desk, data }, 'latest']);
+    } catch (e) { last = `${rc.dir}: ${e.rpc?.data || e.message}`; continue; }
+    let gas = null;
+    try { gas = Number(BigInt(await rpc('eth_estimateGas', [{ from: binder, to: w.desk, data }]))); } catch { gas = null; }
+    console.log('');
+    console.log('SwarmDesk.bind: sign and send this transaction FROM THE BINDER WALLET (the keeper does not send it)');
+    console.log(`  from:     ${binder}   (Desk.binder())`);
+    console.log(`  to:       ${w.desk}   (SwarmDesk)`);
+    console.log(`  value:    0`);
+    console.log(`  chainId:  ${chainId}`);
+    console.log(`  gas:      ${gas === null ? 'estimate failed; use the simulation gas plus margin' : `${gas} (estimated from the binder; add margin)`}`);
+    console.log(`  args:     bind(${registry}, <${rc.dir} GameRegistry creation code>, <${rc.dir} Params creation code>, ${registryCo.launch}, ${registryCo.index}, ${paramsCo.launch}, ${paramsCo.index}, ${w.tokenLaunch})`);
+    console.log(`  data:     ${data}`);
+    console.log('  then re-run `wire` (or `wire --step bind-desk`) to verify Desk.registry() before any further step.');
+    console.log('');
+    return { label: 'SwarmDesk.bind', ok: true, skipped: `calldata printed for the binder ${binder} to sign [${rc.dir}]; simulated from the binder` };
+  }
+  return { label: 'SwarmDesk.bind', ok: false, reason: last };
 }
 function print(report) {
   for (const r of report) console.log(`${r.ok ? 'OK  ' : 'SKIP'} ${r.label}${r.skipped ? ` (${r.skipped})` : ''}${r.reason ? ` - ${r.reason}` : ''}${r.hash ? ` ${r.hash}` : ''}${r.dry ? ' [dry-run]' : ''}`);

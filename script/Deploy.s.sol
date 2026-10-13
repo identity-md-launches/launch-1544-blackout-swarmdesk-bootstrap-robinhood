@@ -198,6 +198,7 @@ contract Deploy is Script {
     }
 
     /// @dev v3.8: no launch coordinates at construction; the token is excluded (Desk precedes the token launch).
+    /// v3.16: this fixture contract is the Desk's pinned binder, since `deploy` sends the bind itself.
     function _desk(LocalApplicationFactory factory, Config memory c) private returns (SwarmDesk) {
         SwarmDesk.BindingConfig memory binding = SwarmDesk.BindingConfig(
             address(factory),
@@ -209,7 +210,7 @@ contract Deploy is Script {
             c.heartbeatBps,
             c.heartbeatCap
         );
-        bytes memory args = SwarmArgs.encode(abi.decode(c.oracle, (SwarmDesk.OracleConfig)), binding);
+        bytes memory args = SwarmArgs.encode(abi.decode(c.oracle, (SwarmDesk.OracleConfig)), binding, address(this));
         return SwarmDesk(factory.deploy(baseLaunch + 2, 0, bytes.concat(vm.getCode("SwarmDesk.sol:SwarmDesk"), args)));
     }
 

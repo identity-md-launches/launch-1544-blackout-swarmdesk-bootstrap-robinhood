@@ -12,9 +12,11 @@ import {MockMarket} from "./mocks/MockMarket.sol";
 import {MockToken} from "./mocks/MockToken.sol";
 import "../src/lib/Errors.sol";
 
-/// @dev v3.12 (docs/m2-trust-assumption.md): what a twin capture of `SwarmDesk.bind` can and cannot do. Test only;
-/// no contract changed. The attacker knows the private configuration and launches a byte-identical twin
-/// (Params + GameRegistry + RewardPool from the pinned code) through the same factory before the honest bind.
+/// @dev v3.12 (docs/m2-trust-assumption.md): what a twin capture of `SwarmDesk.bind` can and cannot do. The attacker
+/// knows the private configuration and launches a byte-identical twin (Params + GameRegistry + RewardPool from the
+/// pinned code) through the same factory before the honest bind. v3.16: `bind` is restricted to the pinned binder,
+/// so the twin can no longer win the race at all; the capture tests now cover the residual case of the binder key
+/// itself choosing the twin (what that key can and cannot do).
 contract TwinCaptureV312Test is BaseTest {
     uint256 private constant ENDOWMENT = 200_000_000 ether;
     address private attacker;
@@ -50,7 +52,7 @@ contract TwinCaptureV312Test is BaseTest {
             bytes.concat(
                 vm.getCode("SwarmDesk.sol:SwarmDesk"),
                 SwarmArgs.encode(
-                    desk.oracleConfig(), SwarmDesk.BindingConfig(address(f), 0, 0, 0, 0, configHash, 200, 1 ether)
+                    desk.oracleConfig(), SwarmDesk.BindingConfig(address(f), 0, 0, 0, 0, configHash, 200, 1 ether), team
                 )
             )
         );
@@ -86,7 +88,14 @@ contract TwinCaptureV312Test is BaseTest {
         g.registry.register(0, launch, 2, poolCode);
     }
 
+    /// @dev From the pinned binder (team), the only account `bind` admits since v3.16.
     function _bind(Game memory g, uint64 launch) private returns (bool ok, bytes memory ret) {
+        return _bindFrom(team, g, launch);
+    }
+
+    function _bindFrom(address who, Game memory g, uint64 launch) private returns (bool ok, bytes memory ret) {
+        uint64 tokenLaunch_ = desk.tokenLaunch(); // read before the prank so the prank reaches the bind call
+        vm.prank(who);
         (ok, ret) = freshDesk.call(
             abi.encodeWithSignature(
                 "bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)",
@@ -97,7 +106,7 @@ contract TwinCaptureV312Test is BaseTest {
                 uint8(1),
                 launch,
                 uint8(0),
-                desk.tokenLaunch()
+                tokenLaunch_
             )
         );
     }
@@ -144,12 +153,44 @@ contract TwinCaptureV312Test is BaseTest {
         assertEq(honest.pool.lockedEndowment(), ENDOWMENT);
     }
 
-    /// The twin wins the race: the honest bind is refused and the honest modules are orphaned.
-    function testTwinCaptureOrphansHonestGame() public {
+    /// v3.16: the twin passes every proof but its launcher is not the binder, so it cannot win the race; the
+    /// honest bind by the binder lands afterwards and the twin is the one orphaned.
+    function testTwinCannotWinTheBindRace() public {
         vm.startPrank(attacker);
         Game memory twin = _launch(41);
-        (bool ok,) = _bind(twin, 41);
         vm.stopPrank();
+        (bool ok, bytes memory ret) = _bindFrom(attacker, twin, 41);
+        assertFalse(ok, "attacker cannot bind");
+        assertEq(bytes4(ret), Unauthorized.selector);
+        (ok, ret) = _bindFrom(bob, twin, 41);
+        assertFalse(ok, "no third party can bind for the attacker either");
+        assertEq(bytes4(ret), Unauthorized.selector);
+        assertEq(address(SwarmDesk(freshDesk).registry()), address(0));
+
+        Game memory honest = _launch(42);
+        (ok,) = _bind(honest, 42);
+        assertTrue(ok, "the binder binds the honest registry after the twin exists");
+        assertEq(address(SwarmDesk(freshDesk).registry()), address(honest.registry));
+        (ok, ret) = _bindFrom(attacker, twin, 41);
+        assertEq(bytes4(ret), Unauthorized.selector);
+        (ok, ret) = _bind(twin, 41);
+        assertEq(bytes4(ret), AlreadyDone.selector);
+        vm.expectRevert(InvalidProof.selector);
+        escrow.forward(address(twin.registry), 41, 1, registryCode, 41, 2, poolCode);
+        escrow.forward(address(honest.registry), 42, 1, registryCode, 42, 2, poolCode);
+        assertEq(token.balanceOf(address(honest.pool)), ENDOWMENT);
+        vm.expectRevert(InsufficientBalance.selector);
+        twin.pool.fundEndowment();
+    }
+
+    /// Residual trust (v3.16): if the binder key itself chose the twin, the honest bind is refused and the honest
+    /// modules are orphaned, exactly the v3.12 capture outcome. The binder cannot bypass a proof, only pick
+    /// among registries that pass all of them.
+    function testBinderChoosingTwinOrphansHonestGame() public {
+        vm.startPrank(attacker);
+        Game memory twin = _launch(41);
+        vm.stopPrank();
+        (bool ok,) = _bind(twin, 41);
         assertTrue(ok);
         assertEq(address(SwarmDesk(freshDesk).registry()), address(twin.registry));
 
@@ -164,15 +205,17 @@ contract TwinCaptureV312Test is BaseTest {
         assertEq(token.balanceOf(address(escrow)), ENDOWMENT);
     }
 
-    /// The escrow pays only the twin's pinned RewardPool, never a wallet or code of the attacker's choice, and
-    /// nothing becomes withdrawable by the attacker.
-    function testTwinCaptureCannotPayAttacker() public {
+    /// Residual trust (v3.16): even a binder-chosen twin pays only the twin's pinned RewardPool, never a wallet or
+    /// code of the attacker's choice, and nothing becomes withdrawable by the attacker.
+    function testBinderChosenTwinCannotPayAttacker() public {
         uint256 attackerTokens = token.balanceOf(attacker);
         uint256 attackerEth = attacker.balance;
         vm.startPrank(attacker);
         Game memory twin = _launch(41);
+        vm.stopPrank();
         (bool ok,) = _bind(twin, 41);
         assertTrue(ok);
+        vm.startPrank(attacker);
 
         // An attacker-chosen pool (other code, or a plain wallet) is refused.
         vm.expectRevert(InvalidProof.selector);

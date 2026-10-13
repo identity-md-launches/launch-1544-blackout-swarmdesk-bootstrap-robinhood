@@ -1,4 +1,10 @@
-# BLACKOUT v3.8 (source v3.13)
+# BLACKOUT v3.8 (source v3.16)
+
+**v3.16 (import audit 10bfac6d, fixed in source).** `SwarmDesk.bind` is restricted to one pinned binder, the
+Desk's eighth constructor word (the project wallet `0x6d51…d007` for the launch); every v3.15 proof still runs for
+that caller and anyone else gets `Unauthorized`. The keeper's `bind-desk` prints the calldata for the binder to
+sign and never sends it. See `report.md` §v3.16, [docs/accepted-v316.md](docs/accepted-v316.md) and
+[docs/m2-trust-assumption.md](docs/m2-trust-assumption.md).
 
 **v3.13 (review finding 6d1287b0, fixed in source).** `FeeRouter` now reads `Params.HeartbeatBps` (packed
 regulator key 41, bounds 200–5000, 200 at launch) for the heartbeat share of the sell surcharge and of routed
@@ -8,7 +14,7 @@ repository build and the launch build are one toolchain. Params keys without a r
 in [docs/params-keys-v313.md](docs/params-keys-v313.md); the twelve SwarmDesk constructor words are unchanged.
 See `report.md` §v3.13 for the new hashes.
 
-Source-only continuation of v3.7 against the real IMD platform (research job b94e6839): no launch number is known at construction, the 20% endowment goes through an ownerless `EndowmentEscrow`, the hook matches the platform pool fee 12500, and the Desk accepts relayed attestations through `submit`. See [launch-v38.md](launch-v38.md) for what is done and what is still open. No deployment, broadcast, token launch or mint. [@IMDBlackout](https://x.com/IMDBlackout) · [playblackout.xyz](https://playblackout.xyz) · [free pack claim](https://playblackout.xyz/freepack).
+Source-only continuation of v3.7 against the real IMD platform (research job b94e6839): no launch number is known at construction, the 20% endowment goes through an ownerless `EndowmentEscrow`, the hook matches the platform pool fee 12500, and the Desk accepts relayed attestations through `submit`. See [launch-v38.md](launch-v38.md) for what is done and what is still open. No deployment, broadcast, token launch or mint. [playblackout.xyz](https://playblackout.xyz) · [free pack claim](https://playblackout.xyz/freepack).
 
 Packs, rooms, repairs, enhancement and lobbying use the existing token. Prices follow the last settled mining yield with explicit floors. Packs and lobbying send 88% to rewards, 10% to the team and 2% to the capped heartbeat; the latter two shares queue for bounded sales through the official pool. Other spending returns entirely to rewards. ETH purchases use an atomic swap-and-pack zap with minimum output. The normal swap fee schedule is retained.
 

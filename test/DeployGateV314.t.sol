@@ -11,6 +11,8 @@ import {Robinhood} from "../src/lib/Robinhood.sol";
 
 contract DeployGateV314Test is Test {
     bytes32 private constant GAME_CONFIG_HASH = 0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3;
+    /// @dev v3.16 eighth constructor word: the project wallet that signs the one `bind` call (not a protocol address).
+    address private constant BINDER = 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007;
 
     function testAllLaunchConstructorsWorkWithNoProtocolCode() public {
         assertEq(Robinhood.PROJECT_FACTORY.code.length, 0);
@@ -31,10 +33,13 @@ contract DeployGateV314Test is Test {
                     bytes32(0xc13efed8438aab53ea052a4507def2dc4ce9856765520dfa28c66daa59cfc11d),
                     bytes32(0x00e69e4445c7ca7256338293f9f9cea439fd2beb1959d1d43ebec7b14493e2f6),
                     bytes32(0xc0ae7511b06744cf7ccadc6b60ff9ff96cb7234cf32988850df33324861cc8df),
-                    GAME_CONFIG_HASH
+                    GAME_CONFIG_HASH,
+                    BINDER
                 )
             )
         );
+        assertEq(desk.binder(), BINDER);
+        assertEq(BINDER.code.length, 0, "the binder is a wallet; the constructor never requires code");
         assertEq(desk.oracleConfig().signer, Robinhood.ATTESTER);
         assertEq(desk.oracleConfig().intake, Robinhood.INTAKE);
         assertEq(desk.oracleConfig().delivery, Robinhood.DELIVERY);

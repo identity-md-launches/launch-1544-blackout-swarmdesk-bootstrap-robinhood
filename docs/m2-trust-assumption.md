@@ -1,16 +1,22 @@
 # M-2 twin front-run of `SwarmDesk.bind`: trust assumption (for the audit judge)
 
-BLACKOUT v3.15. Source only. The binding checks require a hook with matching Desk, token and game configuration (v3.14) and, since v3.15 (audit 031c93c4 finding 1), the LaunchFactory's own launch record naming that hook for the registry's token. This document covers finding M-2 of the v3.10 independent review
-([docs/review-v39-independent.md](review-v39-independent.md)). It says what an attacker who wins the
-`SwarmDesk.bind` race can do and what they cannot, rates the severity, and gives the operational mitigation the
-runbook ([launch-v39.md](../launch-v39.md), L3 and post-L4 wiring) applies. Every claim below cites the code or a test.
-The tests run offline (`test/TwinCaptureV312.t.sol`, `test/EndowmentEscrowV38.t.sol`); the rehearsal on a
-fork of 4663 (`test/fork/RehearsalV311.t.sol`) ran the honest order against the real factory.
+BLACKOUT v3.16. Source only. The binding checks require a hook with matching Desk, token and game configuration
+(v3.14), the LaunchFactory's own launch record naming that hook for the registry's token (v3.15, audit 031c93c4
+finding 1) and, since v3.16 (import audit 10bfac6d), a caller equal to the Desk's pinned `binder`. This document
+covers finding M-2 of the v3.10 independent review ([docs/review-v39-independent.md](review-v39-independent.md))
+and its v3.16 resolution. It says what an attacker who wanted to win the `SwarmDesk.bind` race could do before
+v3.16 and what is left now, rates the severity, and gives the operational responsibilities the runbook
+([launch-v39.md](../launch-v39.md), L3 and post-L4 wiring) applies. Every claim below cites the code or a test.
+The tests run offline (`test/ForeignTokenTwin.t.sol`, `test/TwinCaptureV312.t.sol`, `test/AuditV315.t.sol`,
+`test/EndowmentEscrowV38.t.sol`); the rehearsal on a fork of 4663 (`test/fork/RehearsalV311.t.sol`) ran the honest
+order against the real factory with the binder signing the bind.
 
-## 1. The race
+## 1. The race, and why there is none since v3.16
 
-`SwarmDesk.bind` (`src/SwarmDesk.sol`) is permissionless and runs once. It accepts the first candidate
-registry that meets all of these:
+`SwarmDesk.bind` (`src/SwarmDesk.sol`) runs once. **Since v3.16 it reverts `Unauthorized` for every caller except
+the immutable `binder`**, the eighth constructor word (the project wallet `0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007`
+for the launch; the constructor refuses a zero binder). For that caller it accepts the first candidate registry
+that meets all of these, exactly as in v3.15:
 
 - `keccak256(registryCode)` and `keccak256(paramsCode)` equal a pinned GameRegistry / Params creation hash
   (`SwarmCode.isRegistry`, `SwarmCode.isParams`);
@@ -21,83 +27,95 @@ registry that meets all of these:
 - the registry is the factory's CREATE2 result for the pinned registry code and its constructor tuple at the
   given coordinates, and it has code;
 - its market has code, `IBoundHook(market).desk()` is this Desk, `token()` equals the registry token,
-  and `gameConfigHash()` equals the Desk commitment; mismatches revert `InvalidProof`.
-- (v3.15) `LaunchFactory.positionOf(tokenLaunch)`, the record `claimFees(tokenLaunch)` keys on and only the
-  factory's `launch` writes, names the registry's token as currency1 of an ETH-paired pool and the registry's
-  market as its hook. A market that merely echoes the three values has no record naming it and reverts
-  `InvalidProof` (`test/AuditV315.t.sol`, rehearsal `_m5FakeMarket` against the real factory).
+  and `gameConfigHash()` equals the Desk commitment; mismatches revert `InvalidProof`;
+- `LaunchFactory.positionOf(tokenLaunch)`, the record `claimFees(tokenLaunch)` keys on and only the factory's
+  `launch` writes, names the registry's token as currency1 of an ETH-paired pool (currency0 == address(0); launch
+  832 on 4663 reads `(0x0, 0xa160…7e8D, 12500, 60, 0x8892…60cc)` exactly like 1316) and the registry's market as
+  its hook. A market that merely echoes the three values has no record naming it and reverts `InvalidProof`.
 
 IMD launch numbers cannot be reserved, so nothing on chain separates the honest job A from a byte-identical
-"twin" job launched through the same factory. Whoever calls `bind` first with a valid registry wins.
+"twin" job launched through the same factory. Before v3.16, whoever called `bind` first with a valid registry
+won. Now nobody but the binder can call it, so a twin, genuine-token or foreign-token, **cannot bind**
+(`ForeignTokenTwinTest.testForeignTwinCannotBindFromTheAttacker`, `testNoNonBinderCanBindEitherRegistry`,
+`TwinCaptureV312Test.testTwinCannotWinTheBindRace`).
 
-## 2. What the attacker needs
+## 2. What the v3.15 proofs could not tell apart (import audit 10bfac6d)
 
-1. **The private game configuration**: `starterRoot`, `freeRoot`, `snapshotBlock` and `endowment`. Only their
-   hash is on chain (in the Desk and the hook) until job A reveals them. A twin with any other value fails the
-   `gameConfigHash` check (`testEmptyChainConstructorAndAuthenticatedBindingRejectSpoofs`).
-2. **The real token and hook**. Both are public after L2. A registry with a foreign token fails the hook/token equality check at bind; a market with a different Desk or configuration fails too, and an EOA market is refused (`testTwinWithForeignTokenCannotBind`, `testTwinWithForeignMarketCannotBind`, `testEOAMarketCannotBind`).
-3. **A paid IMD launch through the ProjectFactory.** Only the platform deployer `0xcECc…a551` can launch
-   through the factory, so a twin has to be a launch job admitted and paid like the requester's own. The bind
-   needs Params and GameRegistry. The forward also needs a registered RewardPool. A twin that should run as a
-   game, rather than just block the honest one, needs the whole job A shape: an **8-contract launch**
-   (Params, GameRegistry, RewardPool, FarmRewards, FarmCore, FarmItems, PackSale, StarterClaim), which the fork
-   measured at 21.4M gas. A launch of just the three contracts is enough to capture the Desk and the
-   escrow forward, but it leaves the endowment unpayable until someone registers a FarmRewards (see §3). In
-   both cases the attacker pays a full launch job and passes its admission.
-4. **To land before the honest `bind`**, in the window between job A executing (the roots become public in its
-   objective and on chain) and the keeper's `bind-desk` transaction.
+The v3.15 record proof says "the LaunchFactory deployed this hook for this token". It does not say which token is
+BLACKOUT's. An attacker could:
 
-## 3. What a twin capture can and cannot do
+1. launch their **own** univ4_hook token through the LaunchFactory with a V4Market naming this Desk and the public
+   `gameConfigHash` (both are on chain from L1 and L2);
+2. after L3 makes the roots public, launch Params + GameRegistry (+ RewardPool) on **their** token through the
+   ProjectFactory;
+3. call `bind` with their registry and their launch number.
 
-| Effect | Can the attacker do it? | Why (code / test) |
+Their record is self-consistent: ETH-paired, their token as currency1, their hook, so every v3.15 proof passed
+(`ForeignTokenTwinTest.testForeignTwinIsSelfConsistentAndPassesEveryProofExceptTheBinder` checks every proven
+value). The Desk would have been captured forever and `EndowmentEscrow.forward` could never have forwarded the
+genuine remainder, since it requires `Desk.registry()` to be the registry it pays. The realistic hook shape
+reports the attacker's token (a hook is built for one token), which `test/AuditV315.t.sol`
+`testAttackerLaunchRecordNamesAnotherTokenAndIsRefused` now models.
+
+The v3.16 fix is the caller restriction, nothing else: no requester check was added, no proof was weakened or
+reordered, and the keeper's wiring key never sends the bind (it prints the calldata for the binder to sign).
+
+## 3. What the remaining trust is: the binder key
+
+| Effect | Can an attacker do it? | Why (code / test) |
 |---|---|---|
-| Bind the Desk to the twin registry | **Yes**, if they win the race | `bind` accepts the first valid candidate (`testTwinCaptureOrphansHonestGame`) |
-| Bind the honest registry afterwards | No, for anyone | `bind` reverts `AlreadyDone` (same test) |
-| Make the escrow pay an attacker wallet | **No** | `EndowmentEscrow.forward` sends only to `registry.module(0)`. That address must be the factory's CREATE2 result of the pinned RewardPool code with the bound registry as its argument, and it must have code. Other code or other coordinates revert `InvalidProof` (`testTwinCaptureCannotPayAttacker`) |
-| Make the escrow pay the twin's pinned RewardPool | Yes: this is the capture's only value movement | Same test: the whole 200M lands in the twin pool, once (`AlreadyDone` after that) |
-| Withdraw tokens from the twin RewardPool | **No** | `pay`, `reserve` and `recycle` are `onlyRewards` (the registry's pinned FarmRewards, role 1). The attacker gets `Unauthorized`, and before a FarmRewards is registered nothing can pay at all. There is no owner, withdrawal or sweep (`testTwinCaptureCannotPayAttacker`) |
-| Change emission, prices or pauses | **No** | The twin's Params must name the same Desk as `swarmWallet` (checked in `bind`). The Desk acts only on attested oracle answers, inside hard-coded bounds |
-| Take hook ETH fees | **No** | `V4Market.bindFeeRouter` accepts only the bound registry's pinned FeeRouter (role 6). `FeeRouter` routes ETH into game rewards (pull payments to players). The team's 1% comes from `LaunchFactory.claimFees`, which goes to the paying wallet whichever registry is bound |
-| Change the token or the pool | **No** | v3.14 checks that the market has code and its `desk()`, `token()` and `gameConfigHash()` match this Desk and registry; v3.15 additionally requires the LaunchFactory record for the supplied token launch to name the registry's token and that market as its hook, so a copy that echoes the three values cannot capture the escrow forward (`testFakeMarketEchoingDeskTokenAndHashCannotBind`, `testAttackerLaunchRecordNamesAnotherTokenAndIsRefused`, `testRecordWithOtherHookOrOtherPairCurrencyIsRefused`, `testRealHookRecordedByTheLaunchFactoryBinds`, plus the v3.14 tests) |
-| Leave the honest job A/B contracts orphaned | **Yes** | The honest registry is never bound, so its pool never receives the endowment (`fundEndowment` reverts `InsufficientBalance`) and the hook never binds its FeeRouter |
+| Bind any registry, genuine or twin | **No** | `bind` reverts `Unauthorized` unless `msg.sender == binder` (`ForeignTokenTwin`, `TwinCaptureV312`, `AuditV315`, rehearsal `_m5Bind` from the platform deployer and a keeper hot wallet) |
+| Make the binder bind a registry that fails a proof | **No** | The proofs run for the binder too: wrong launch number, wrong coordinates, unrecorded record, a hook naming another token all revert `InvalidProof`; zero reverts `InvalidValue` (`ForeignTokenTwinTest.testBinderCannotBypassAnyProof`) |
+| Bind the honest registry afterwards | No, for anyone | `AlreadyDone` after the one bind (`testBinderBindsTheGenuineRegistryThenAlreadyDone`) |
+| Make the escrow pay an attacker wallet | **No** | `EndowmentEscrow.forward` sends only to `registry.module(0)`, the pinned RewardPool of the bound registry (`testBinderChosenTwinCannotPayAttacker`) |
+| Capture the Desk with a foreign-token twin | **No** | The attacker is not the binder (`testForeignTwinCannotBindFromTheAttacker`) |
 
-For the matching pinned-game twin tested here, **no privileged token or ETH withdrawal becomes available to the attacker.** The endowment still sits in a RewardPool
-running the pinned code, which emits it only to players by the normal mining rules, over the same 42-day drip.
-That game uses the same token, the same roots (the same starter and free-pack claims) and the same Desk. The
-attacker is a player like anyone else. The one advantage is knowing the twin's addresses first, so they can
-start playing before the community points the UI at the twin. The damage is **griefing**: the requester's paid
-job A/B launches are wasted, the published wiring has to move to the twin registry, and the timeline slips.
+What is left is the **binder key itself**:
+
+- **Choice among proven registries.** If the binder key chose a proven twin (genuine token, same roots; or a
+  foreign-token twin whose hook names this Desk), the honest graph would be orphaned exactly as the v3.12 capture
+  described (`TwinCaptureV312Test.testBinderChoosingTwinOrphansHonestGame`). The key cannot do more than that: it
+  cannot pay itself, change rules or take hook fees (`testBinderChosenTwinCannotPayAttacker`). The binder is the
+  project wallet that already pays the launches and receives the platform fee share, so this is the requester
+  trusting their own key.
+- **Liveness.** `bind` is a one-time call by the pinned binder. If that key is lost before binding, the Desk can
+  never bind and the endowment stays in the escrow (no owner, rotation or fallback exists). The binder cannot
+  bypass any proof. Listed in `docs/accepted-v316.md`.
 
 ## 4. Severity
 
-**Low. This is a platform trust assumption, not a fund-loss bug.**
+**Resolved for third parties; a key-custody trust assumption for the requester.**
 
-- Impact: no theft and no attacker-controlled exit. Funds stay under the pinned game rules. The honest launches
-  are orphaned, which costs launch fees and time.
-- Likelihood: the attacker needs a configuration that stays private until job A, has to pay and pass a full
-  platform launch, and has to land inside a window of a few blocks that the keeper closes right after job A. The
-  only party that sees the roots before job A executes is the platform that runs it (the residual noted in the
-  review). Trusting the platform not to front-run its own customer is the same trust the launch already puts in
-  it for deploying the exact bytecode.
-- The v3.14 consistency fix closes the mismatched-hook/token cases and the v3.15 record proof closes the fake-market case: a twin must now name the genuine token and the genuine hook, so the escrow can only ever forward to a RewardPool of a game built on the launched token and hook. Closing the remaining matching-twin race (same token, same hook, same roots) still needs an on-chain fact only the honest job A has, such as a reserved launch number (removed by the v3.8 brief) or a ProjectFactory record of the payer (not in that factory's interface). Either one would change the Desk pin and is the requester's decision.
+- Impact of a third party: none. No path binds the Desk without the binder key.
+- Impact of the binder key: at most the v3.12 griefing outcome (orphaned honest launches), never fund loss; the
+  binder also cannot bind anything that fails a proof.
+- Liveness: the single binder key must be available once, after L3. Losing it leaves the endowment in the escrow.
 
-## 5. Operational mitigation (in the runbook)
+## 5. Operational responsibilities (in the runbook)
 
-1. **Keep the roots private until the bind.** `starterRoot`, `freeRoot`, `snapshotBlock` and the eligibility
-   lists stay unpublished until `Desk.registry()` equals the job A registry (launch-v39.md §0).
-2. **The keeper binds right after job A.** Immediately after L3, run `node keeper/keeper.mjs wire --step bind-desk` the moment
-   job A's addresses are recorded. It reads `Desk.registry()` before and after the bind and throws `STOP`
-   if the bound registry is not the job A registry (`keeper/keeper.mjs`, wire step 1).
-3. **Check `Desk.registry()` before every forward.** Post-L4 forwarding repeats the check. `EndowmentEscrow.forward` is never
-   sent unless `Desk.registry()` is `<REGISTRY>`. If it is anything else: stop, publish nothing, escalate to
-   the requester. Any recovery requires a separate requester decision; this source assignment authorizes no token replacement or deployment.
+1. **Keep the roots private until the bind.** Still good practice; a twin cannot bind, but publishing early gives
+   no benefit.
+2. **The binder signs right after job A.** Immediately after L3, run `node keeper/keeper.mjs wire --step bind-desk`.
+   It simulates `SwarmDesk.bind` **from the binder** (`Desk.binder()`) and prints the transaction (to, from, data)
+   for the project wallet to sign and send. The keeper key never sends it. Re-run `wire` afterwards: it reads
+   `Desk.registry()` and throws `STOP` if the bound registry is not the job A registry.
+3. **Check `Desk.registry()` before every forward.** The keeper refuses `bind-router` and `forward` while the
+   Desk is unbound or bound to another registry. `EndowmentEscrow.forward` is never sent unless
+   `Desk.registry()` is `<REGISTRY>`. If it is anything else: stop, publish nothing, escalate to the requester.
+4. **Keep the binder key safe until the bind lands.** There is no replacement path; this source assignment
+   authorizes no token replacement or deployment.
 
 ## 6. Evidence
 
 | Test | Shows |
 |---|---|
-| `TwinCaptureV312Test.testHonestBindThenForwardReachesHonestPool` | Without a twin: bind, forward to the honest pinned pool, drip starts |
-| `TwinCaptureV312Test.testTwinCaptureOrphansHonestGame` | Twin binds first; the honest bind reverts `AlreadyDone`; forward to the honest registry reverts `InvalidProof`; the honest pool cannot fund |
-| `TwinCaptureV312Test.testTwinCaptureCannotPayAttacker` | Forward to attacker-chosen code or coordinates reverts; the only exit is the twin's pinned pool; `pay`/`reserve`/`recycle` from the attacker revert `Unauthorized`; the attacker's token and ETH balances are unchanged; the twin's Params answer to the same Desk |
-| `EndowmentEscrowV38Test.testTwinWithForeignTokenCannotDrainEscrow` | A twin with another token cannot bind; escrow remains unforwarded |
-| `RehearsalV311` (fork of 4663) | The honest L1–L4 sequence and permissionless wiring against the real ProjectFactory, its registry and LaunchFactory |
+| `ForeignTokenTwinTest.testForeignTwinIsSelfConsistentAndPassesEveryProofExceptTheBinder` | The attacker's foreign-token twin is self-consistent against every v3.15 proof |
+| `ForeignTokenTwinTest.testForeignTwinCannotBindFromTheAttacker` | The attacker's bind reverts `Unauthorized`; the escrow stays untouched |
+| `ForeignTokenTwinTest.testNoNonBinderCanBindEitherRegistry` | Bystanders, the keeper hot wallet and the test contract are refused for the twin and the genuine registry |
+| `ForeignTokenTwinTest.testBinderBindsTheGenuineRegistryThenAlreadyDone` | The binder binds the genuine registry once; everyone, including the binder, gets `AlreadyDone`; the escrow forwards to the genuine pinned pool only |
+| `ForeignTokenTwinTest.testBinderCannotBypassAnyProof` | Wrong record, coordinates, launch number, zero and a mixed-token registry all revert for the binder |
+| `ForeignTokenTwinTest.testZeroBinderRevertsAtConstruction` | Zero binder refused by the constructor and the encoder; eight static words |
+| `TwinCaptureV312Test.testTwinCannotWinTheBindRace` | A genuine-token twin cannot bind; the honest bind lands afterwards and the twin is orphaned |
+| `TwinCaptureV312Test.testBinderChoosingTwinOrphansHonestGame`, `testBinderChosenTwinCannotPayAttacker` | Residual: a binder-chosen twin orphans the honest game but pays only its pinned pool, nothing to the attacker |
+| `AuditV315Test` | The v3.15 record proofs, now exercised for the binder, with the realistic attacker hook reporting the attacker's token |
+| `RehearsalV311` (fork of 4663) | The honest L1–L4 sequence against the real ProjectFactory, LaunchFactory and PoolManager with the binder signing the bind and the platform deployer and a keeper wallet refused |

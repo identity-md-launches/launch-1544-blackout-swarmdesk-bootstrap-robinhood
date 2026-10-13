@@ -18,6 +18,8 @@ import "../src/lib/Errors.sol";
 /// `token()` and `gameConfigHash()`. The proof is the factory's own `positionOf(tokenLaunch)` record, the one
 /// `claimFees(tokenLaunch)` keys on; the local fixture at `Robinhood.LAUNCH_FACTORY` reproduces its eight-word
 /// layout and reads zeros for unrecorded numbers exactly as the live factory does.
+/// v3.16 (import audit 10bfac6d): every proof runs for the pinned binder only (`team` here); the attacker's own
+/// self-consistent launch is covered in `test/ForeignTokenTwin.t.sol`.
 contract AuditV315Test is BaseTest {
     LocalApplicationFactory private f;
     LocalLaunchFactory private lf;
@@ -49,10 +51,11 @@ contract AuditV315Test is BaseTest {
             bytes.concat(
                 vm.getCode("SwarmDesk.sol:SwarmDesk"),
                 SwarmArgs.encode(
-                    desk.oracleConfig(), SwarmDesk.BindingConfig(address(f), 0, 0, 0, 0, configHash, 200, 1 ether)
+                    desk.oracleConfig(), SwarmDesk.BindingConfig(address(f), 0, 0, 0, 0, configHash, 200, 1 ether), team
                 )
             )
         );
+        assertEq(SwarmDesk(fresh).binder(), team);
     }
 
     /// @dev Params at (launch, 0) and a registry at (launch, 1) naming `gameToken` and `gameMarket`.
@@ -71,7 +74,16 @@ contract AuditV315Test is BaseTest {
         r = GameRegistry(f.deploy(launch, 1, bytes.concat(registryCode, args)));
     }
 
+    /// @dev From the pinned binder: the proofs are only reached by that caller since v3.16.
     function _bind(GameRegistry r, uint64 launch, uint64 tokenLaunch) private returns (bool ok, bytes memory ret) {
+        return _bindFrom(team, r, launch, tokenLaunch);
+    }
+
+    function _bindFrom(address who, GameRegistry r, uint64 launch, uint64 tokenLaunch)
+        private
+        returns (bool ok, bytes memory ret)
+    {
+        vm.prank(who);
         (ok, ret) = fresh.call(
             abi.encodeWithSignature(
                 "bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)",
@@ -111,18 +123,23 @@ contract AuditV315Test is BaseTest {
         _reject(r, 61, 0, InvalidValue.selector);
     }
 
-    /// @dev An attacker's own launch records their own token with the echo as hook; the registry's token differs.
+    /// @dev The realistic attacker hook reports the attacker's own token (a hook is built for one token). A registry
+    /// on the genuine token naming that hook fails the token/hook consistency check; a registry on the attacker's
+    /// token with the attacker's own record is self-consistent and passes every proof, which is exactly the import
+    /// audit's finding: since v3.16 it is refused because the attacker is not the binder (see ForeignTokenTwin).
     function testAttackerLaunchRecordNamesAnotherTokenAndIsRefused() public {
-        MockMarket fake = new MockMarket(address(token));
-        fake.configureBinding(fresh, configHash);
         MockToken other = new MockToken();
+        MockMarket fake = new MockMarket(address(other));
+        fake.configureBinding(fresh, configHash);
+        assertEq(address(fake.token()), address(other), "the attacker hook reports the attacker's token");
         lf.record(62, address(0), address(other), address(fake), makeAddr("attacker"));
         GameRegistry r = _game(62, address(token), address(fake));
         _reject(r, 62, 62, InvalidProof.selector);
-        // A registry naming the attacker's token fails the Desk's earlier token/hook consistency check as well
-        // as the record check against the launched token: the escrowed endowment is the launched token.
         GameRegistry foreign = _game(63, address(other), address(fake));
-        _reject(foreign, 63, 62, InvalidProof.selector);
+        (bool ok, bytes memory reason) = _bindFrom(makeAddr("attacker"), foreign, 63, 62);
+        assertFalse(ok, "the attacker cannot bind their self-consistent twin");
+        assertEq(bytes4(reason), Unauthorized.selector);
+        assertEq(address(SwarmDesk(fresh).registry()), address(0));
     }
 
     /// @dev A record naming the token with a different hook, or a pool that is not ETH-paired, is refused.
@@ -136,7 +153,7 @@ contract AuditV315Test is BaseTest {
         _reject(r, 64, 65, InvalidProof.selector);
     }
 
-    /// @dev The genuine hook (V4Market code) whose record names the registry's token binds, once.
+    /// @dev The genuine hook (V4Market code) whose record names the registry's token binds, once, for the binder.
     function testRealHookRecordedByTheLaunchFactoryBinds() public {
         MockV4Manager manager = new MockV4Manager();
         TestV4Market hook =
@@ -150,16 +167,20 @@ contract AuditV315Test is BaseTest {
         GameRegistry r = _game(66, address(token), address(hook));
         // Wrong token launch first: the right hook under a number that records nothing.
         _reject(r, 66, 67, InvalidProof.selector);
+        // v3.16: the complete, correct proof from a non-binder is refused.
+        (bool ok, bytes memory reason) = _bindFrom(bob, r, 66, 66);
+        assertFalse(ok);
+        assertEq(bytes4(reason), Unauthorized.selector);
         vm.expectEmit(true, false, false, true, fresh);
         emit Bound(address(r));
-        vm.prank(bob);
-        (bool ok,) = _bind(r, 66, 66);
-        assertTrue(ok, "the recorded hook binds");
+        (ok,) = _bind(r, 66, 66);
+        assertTrue(ok, "the recorded hook binds for the binder");
         assertEq(address(SwarmDesk(fresh).registry()), address(r));
         assertEq(SwarmDesk(fresh).tokenLaunch(), 66);
         assertEq(SwarmDesk(fresh).bindingConfig().registryLaunch, 66);
-        (ok,) = _bind(r, 66, 66);
+        (ok, reason) = _bind(r, 66, 66);
         assertFalse(ok, "AlreadyDone");
+        assertEq(bytes4(reason), AlreadyDone.selector);
     }
 
     /// @dev The base fixture bound through the same proof: its token launch is recorded and names its market.
@@ -173,5 +194,6 @@ contract AuditV315Test is BaseTest {
         assertEq(k.fee, 12500);
         assertEq(k.tickSpacing, 60);
         assertEq(address(desk.registry()), address(d.registry));
+        assertEq(desk.binder(), address(deployment), "the deploy fixture is the fixture Desk's binder");
     }
 }

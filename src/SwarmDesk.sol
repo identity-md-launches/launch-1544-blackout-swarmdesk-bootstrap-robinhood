@@ -116,6 +116,10 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
     uint16 public constant SEVERITY_MAX = 7000;
     OracleConfig private config;
     BindingConfig private binding;
+    /// @notice The only account that may call `bind` (v3.16, import audit 10bfac6d). Every proof still applies to
+    /// what it binds; the pin only decides who may choose among the registries that pass them. If this key is lost
+    /// before binding, the Desk can never bind and the endowment stays in the escrow.
+    address public immutable binder;
     IGameRegistry public registry;
     /// @notice The LaunchFactory launch number whose record named the bound registry's token and hook (v3.15).
     uint64 public tokenLaunch;
@@ -136,13 +140,15 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
     event Executed(uint8 indexed stream, bytes32 indexed requestId, bytes32 letterHash);
     event ActionSkipped(uint8 indexed action, bytes reason);
 
-    /// @dev Seven static ABI words fit the launcher's flat constructor encoder and the legacy (non via-IR)
-    /// code generator the IMD verifier builds with, with no protocol-address arguments (v3.14).
+    /// @dev Eight static ABI words fit the launcher's flat constructor encoder and the legacy (non via-IR)
+    /// code generator the IMD verifier builds with, with no protocol-address arguments (v3.14, v3.16).
     /// policyWord = chainId[0:32] | fromBlock[32:80] | toBlock[80:128] | maxPrice[128:224] | heartbeatBps[224:240];
     /// bits 240-255 must be zero. No launch coordinate is taken: IMD launch numbers cannot be reserved, so
     /// they are supplied and proven at bind time (v3.8). The heartbeat cap is fixed at 1 ether.
     /// gameConfigHash = keccak256(abi.encode(starterRoot, freeRoot, snapshotBlock, endowment)); the token
     /// is deliberately excluded because the Desk bootstrap precedes the token launch.
+    /// binder_ (v3.16) is the project wallet that will send the one `bind` call; it is never an IMD protocol
+    /// address and the constructor does not require it to have code.
     constructor(
         bytes32 action_,
         uint256 policyWord,
@@ -150,9 +156,11 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         bytes32 regulatorQuestion,
         bytes32 eventBody,
         bytes32 regulatorBody,
-        bytes32 gameConfigHash_
+        bytes32 gameConfigHash_,
+        address binder_
     ) OracleAttestationConsumer(Robinhood.ATTESTER) {
-        if (policyWord >> 240 != 0) revert InvalidValue();
+        if (policyWord >> 240 != 0 || binder_ == address(0)) revert InvalidValue();
+        binder = binder_;
         OracleConfig memory o;
         o.intake = Robinhood.INTAKE;
         o.delivery = Robinhood.DELIVERY;
@@ -189,12 +197,16 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         return binding;
     }
 
-    /// @notice Permissionless one-time binding with bind-time proofs: the ProjectFactory admits each launch
-    /// once and only from its deployer, so the recorded coordinates plus pinned creation code identify the
+    /// @notice One-time binding by the pinned `binder`, with bind-time proofs: the ProjectFactory admits each
+    /// launch once and only from its deployer, so the recorded coordinates plus pinned creation code identify the
     /// only Registry/Params it can have created. The frozen roots/snapshot/endowment must match the
     /// commitment and Params must point back to this Desk. No launch number is known at construction.
     /// v3.15: the registry's market must also be the hook the LaunchFactory recorded for `tokenLaunch_`, paired
     /// with the registry's token (see `_proveHook`); a market that merely echoes this Desk's values is refused.
+    /// v3.16 (import audit 10bfac6d): the proofs cannot tell the genuine token from an attacker's own univ4_hook
+    /// launch whose hook names this Desk and the public commitment, because that launch has its own
+    /// self-consistent LaunchFactory record. Only `binder` may therefore call; every proof still applies to the
+    /// registry it names, so the binder can choose among proven registries but cannot bypass any proof.
     function bind(
         address candidate,
         bytes calldata registryCode,
@@ -205,6 +217,7 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         uint8 paramsIndex,
         uint64 tokenLaunch_
     ) external {
+        if (msg.sender != binder) revert Unauthorized();
         if (address(registry) != address(0)) revert AlreadyDone();
         if (registryLaunch == 0 || paramsLaunch == 0 || tokenLaunch_ == 0 || registryIndex >= 8 || paramsIndex >= 8) {
             revert InvalidValue();
@@ -249,9 +262,12 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
 
     /// @dev The registry's market must have code and answer this Desk, the registry's token and the commitment
     /// (v3.14), and (v3.15) it must be the hook of the LaunchFactory's record for `launch`, with the registry's
-    /// token as currency1 of an ETH-paired pool. Values the hook returns about itself prove nothing: the record is
-    /// written only by the LaunchFactory, in the launch that deployed both the token and the hook, so a copy
-    /// that echoes the three values has no record naming it. An unrecorded number reads as zeros.
+    /// token as currency1 of an ETH-paired pool (currency0 == address(0): launch 832 on 4663 reads
+    /// (0x0, token, 12500, 60, hook) exactly like 1316). Values the hook returns about itself prove nothing: the
+    /// record is written only by the LaunchFactory, in the launch that deployed both the token and the hook, so a
+    /// copy that echoes the three values has no record naming it. An unrecorded number reads as zeros. The record
+    /// does not say which token is BLACKOUT's: an attacker's own launch is just as self-consistent, which is why
+    /// `bind` is restricted to `binder` (v3.16).
     function _proveHook(ISwarmRegistry r, uint64 launch) private view {
         IBoundHook h = IBoundHook(r.market());
         if (address(h).code.length == 0) revert InvalidProof();

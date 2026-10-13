@@ -248,8 +248,9 @@ contract RehearsalV311Test is Test {
         console2.log("L1 SwarmDesk + EndowmentEscrow via ProjectFactory, launch", N_DESK);
         SwarmDesk.BindingConfig memory b =
             SwarmDesk.BindingConfig(address(PF), 0, 0, 0, 0, s.gameConfigHash, 200, 1 ether);
-        bytes memory args = SwarmArgs.encode(_oracle(), b);
-        assertEq(args.length, 7 * 32, "seven static constructor words");
+        // v3.16: the eighth word pins the binder, the project wallet that signs the one bind call.
+        bytes memory args = SwarmArgs.encode(_oracle(), b, TEAM);
+        assertEq(args.length, 8 * 32, "eight static constructor words");
         bytes[] memory codes = new bytes[](2);
         codes[0] = bytes.concat(type(SwarmDesk).creationCode, args);
         address predictedDesk = PF.predictContract(N_DESK, 0, codes[0]);
@@ -263,6 +264,7 @@ contract RehearsalV311Test is Test {
         s.escrow = EndowmentEscrow(d[1]);
         assertEq(address(s.desk), predictedDesk, "$contract:SwarmDesk resolves inside L1");
         assertEq(address(s.desk.registry()), address(0), "unbound");
+        assertEq(s.desk.binder(), TEAM, "binder pinned to the project wallet");
         assertEq(s.desk.bindingConfig().gameConfigHash, s.gameConfigHash);
         assertEq(s.desk.oracleConfig().signer, Robinhood.ATTESTER, "fixed protocol signer");
         assertEq(s.escrow.factory(), address(PF));
@@ -402,7 +404,13 @@ contract RehearsalV311Test is Test {
         return vm.getCode(string.concat(name, ".sol:", name));
     }
 
+    /// @dev v3.16: every bind is signed by the binder (TEAM); `_bindFrom` exercises other senders.
     function _bind(address candidate, uint64 launch, uint8 index, uint64 tokenLaunch) internal {
+        _bindFrom(TEAM, candidate, launch, index, tokenLaunch);
+    }
+
+    function _bindFrom(address who, address candidate, uint64 launch, uint8 index, uint64 tokenLaunch) internal {
+        vm.prank(who);
         s.desk
             .bind(
                 candidate,
@@ -453,6 +461,9 @@ contract RehearsalV311Test is Test {
         // Failure: the fake-market registry passes every v3.14 check and is refused by the record check.
         vm.expectRevert(InvalidProof.selector);
         _bind(d[1], N_FAKE, 1, N_TOKEN);
+        // v3.16: the fake-market registry from its launcher is refused before the proofs run.
+        vm.expectRevert(Unauthorized.selector);
+        _bindFrom(s.deployer, d[1], N_FAKE, 1, N_TOKEN);
         // Failure: the honest registry under another launch's real record (1316) or an unrecorded number.
         vm.expectRevert(InvalidProof.selector);
         _bind(address(s.registry), N_A, 1, 1316);
@@ -465,7 +476,14 @@ contract RehearsalV311Test is Test {
     }
 
     function _m5Bind() internal {
-        console2.log("M5 Desk.bind (permissionless), v3.15 signature with the L2 launch number", N_TOKEN);
+        console2.log("M5 Desk.bind by the binder, v3.15 signature with the L2 launch number", N_TOKEN);
+        // Failure (v3.16): the complete, correct proof from anyone but the binder is refused before any proof.
+        vm.expectRevert(Unauthorized.selector);
+        _bindFrom(s.deployer, address(s.registry), N_A, 1, N_TOKEN);
+        vm.expectRevert(Unauthorized.selector);
+        _bindFrom(makeAddr("keeper hot wallet"), address(s.registry), N_A, 1, N_TOKEN);
+        assertEq(address(s.desk.registry()), address(0), "still unbound");
+        console2.log("  non-binder senders refused (Unauthorized): ok");
         // Failure: a contract that is not the recorded registry at these coordinates is refused.
         vm.expectRevert();
         _bind(address(s.escrow), N_A, 1, N_TOKEN);
@@ -478,6 +496,8 @@ contract RehearsalV311Test is Test {
         assertEq(s.desk.tokenLaunch(), N_TOKEN, "Desk.tokenLaunch() == L2 launch number");
         vm.expectRevert(AlreadyDone.selector);
         _bind(address(s.registry), N_A, 1, N_TOKEN);
+        vm.expectRevert(Unauthorized.selector);
+        _bindFrom(s.deployer, address(s.registry), N_A, 1, N_TOKEN);
         console2.log("  check Desk.registry() == REGISTRY: ok", address(s.registry));
     }
 

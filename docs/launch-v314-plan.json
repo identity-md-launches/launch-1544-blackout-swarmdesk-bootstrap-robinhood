@@ -1,8 +1,8 @@
 {
-  "version": "3.15",
+  "version": "3.16",
   "chainId": 4663,
   "gameConfigHash": "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3",
-  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records. v3.15 changes only the SwarmDesk creation hash (bind proves the hook against LaunchFactory.positionOf); the other 18 hashes are byte-identical to v3.14.",
+  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records. v3.16 changes only the SwarmDesk creation hash and adds its eighth constructor word, the binder 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007 (the project wallet that signs the one bind call; not an IMD protocol address); the other 18 hashes are byte-identical to v3.14/v3.15.",
   "launches": [
     {
       "id": "L1",
@@ -17,9 +17,10 @@
             "0xc13efed8438aab53ea052a4507def2dc4ce9856765520dfa28c66daa59cfc11d",
             "0x00e69e4445c7ca7256338293f9f9cea439fd2beb1959d1d43ebec7b14493e2f6",
             "0xc0ae7511b06744cf7ccadc6b60ff9ff96cb7234cf32988850df33324861cc8df",
-            "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"
+            "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3",
+            "0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007"
           ],
-          "creationHash": "0x3731f03eac78693477b4630fa5ebb8768bad1fbbc8f0e8d6904e12db2a76cc91"
+          "creationHash": "0x81b258d403f90ab53a3c52d0b5ee895e57b2c80667b6fb82b637c3cf92a17b59"
         },
         {
           "name": "EndowmentEscrow",
