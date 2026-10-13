@@ -97,14 +97,15 @@ contract EndowmentEscrowV38Test is BaseTest {
         market.configureBinding(fresh, configHash);
         (bool ok, bytes memory reason) = fresh.call(
             abi.encodeWithSignature(
-                "bind(address,bytes,bytes,uint64,uint8,uint64,uint8)",
+                "bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)",
                 address(r),
                 registryCode,
                 type(Params).creationCode,
                 uint64(21),
                 uint8(1),
                 uint64(21),
-                uint8(0)
+                uint8(0),
+                desk.tokenLaunch()
             )
         );
         if (gameToken == address(token)) {

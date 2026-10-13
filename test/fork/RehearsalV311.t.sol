@@ -4,6 +4,7 @@ import {Test, console2} from "forge-std/Test.sol";
 import {SwarmDesk} from "../../src/SwarmDesk.sol";
 import {Robinhood} from "../../src/lib/Robinhood.sol";
 import {MockOracleSigner} from "../mocks/MockOracleSigner.sol";
+import {MockMarket} from "../mocks/MockMarket.sol";
 import {SwarmArgs} from "../../script/SwarmArgs.sol";
 import {SwarmCode} from "../../src/lib/SwarmCode.sol";
 import {ModuleCode} from "../../src/lib/ModuleCode.sol";
@@ -89,6 +90,11 @@ interface ILaunchFactory {
     function claimFees(uint64 launchNumber) external;
     function poolManager() external view returns (address);
     function deployer() external view returns (address);
+    /// @dev v3.15: the launch record `claimFees` keys on; `SwarmDesk.bind` proves the hook against it.
+    function positionOf(uint64 launchNumber)
+        external
+        view
+        returns (PoolKey memory key, int24 tickLower, int24 tickUpper, address requester);
 }
 
 /// @title BLACKOUT v3.14 fork rehearsal of launch-v39.md steps M1–M13 on a Robinhood Chain (4663) fork.
@@ -114,6 +120,8 @@ contract RehearsalV311Test is Test {
     uint64 internal constant N_TOKEN = 777002;
     uint64 internal constant N_A = 777003;
     uint64 internal constant N_B = 777004;
+    /// @dev v3.15: a fake-market registry launched through the real ProjectFactory, refused by bind.
+    uint64 internal constant N_FAKE = 777005;
 
     struct State {
         address deployer;
@@ -157,7 +165,7 @@ contract RehearsalV311Test is Test {
         console2.log("== BLACKOUT v3.14 fork rehearsal, chain", block.chainid, "fork block", block.number);
         console2.log("deployer (impersonated)", s.deployer);
         console2.log("gameConfigHash (test roots)", vm.toString(s.gameConfigHash));
-        for (uint64 n = N_DESK; n <= N_B; ++n) {
+        for (uint64 n = N_DESK; n <= N_FAKE; ++n) {
             assertFalse(PFR.isRecorded(n), "throw-away launch number already recorded");
         }
         _m1Desk();
@@ -394,18 +402,82 @@ contract RehearsalV311Test is Test {
         return vm.getCode(string.concat(name, ".sol:", name));
     }
 
+    function _bind(address candidate, uint64 launch, uint8 index, uint64 tokenLaunch) internal {
+        s.desk
+            .bind(
+                candidate,
+                type(GameRegistry).creationCode,
+                type(Params).creationCode,
+                launch,
+                index,
+                launch,
+                0,
+                tokenLaunch
+            );
+    }
+
+    /// @dev v3.15: the real LaunchFactory's record for L2 names the token and the hook; a market that merely
+    /// echoes desk/token/hash, even behind a registry launched through the real ProjectFactory, is refused.
+    function _m5FakeMarket() internal {
+        (PoolKey memory k,,, address requester) = LF.positionOf(N_TOKEN);
+        assertEq(k.currency0, address(0), "ETH-paired record");
+        assertEq(k.currency1, s.token, "record names the launched token");
+        assertEq(k.hooks, address(s.hook), "record names the launched hook");
+        assertEq(k.fee, 12500);
+        assertEq(k.tickSpacing, 60);
+        assertEq(requester, TEAM, "record names the paying wallet");
+        console2.log("  LaunchFactory.positionOf(N_TOKEN) names token/hook/requester: ok");
+        MockMarket fake = new MockMarket(s.token);
+        fake.configureBinding(address(s.desk), s.gameConfigHash);
+        assertEq(fake.desk(), address(s.desk));
+        assertEq(address(fake.token()), s.token);
+        assertEq(fake.gameConfigHash(), s.gameConfigHash);
+        bytes[] memory codes = new bytes[](2);
+        string[] memory names = new string[](2);
+        codes[0] = bytes.concat(type(Params).creationCode, abi.encode(address(s.desk), uint256(200), uint256(1 ether)));
+        names[0] = "Params";
+        codes[1] = bytes.concat(
+            type(GameRegistry).creationCode,
+            abi.encode(
+                s.token,
+                PF.predictContract(N_FAKE, 0, codes[0]),
+                address(fake),
+                s.starterRoot,
+                s.freeRoot,
+                s.snapshotBlock,
+                ENDOWMENT
+            )
+        );
+        names[1] = "GameRegistry";
+        (address[] memory d,) = _launchContracts(N_FAKE, codes, names);
+        // Failure: the fake-market registry passes every v3.14 check and is refused by the record check.
+        vm.expectRevert(InvalidProof.selector);
+        _bind(d[1], N_FAKE, 1, N_TOKEN);
+        // Failure: the honest registry under another launch's real record (1316) or an unrecorded number.
+        vm.expectRevert(InvalidProof.selector);
+        _bind(address(s.registry), N_A, 1, 1316);
+        vm.expectRevert(InvalidProof.selector);
+        _bind(address(s.registry), N_A, 1, N_FAKE);
+        vm.expectRevert(InvalidValue.selector);
+        _bind(address(s.registry), N_A, 1, 0);
+        assertEq(address(s.desk.registry()), address(0), "still unbound");
+        console2.log("  fake market echoing desk/token/hash refused; wrong/unrecorded token launch refused: ok");
+    }
+
     function _m5Bind() internal {
-        console2.log("M5 Desk.bind (permissionless)");
+        console2.log("M5 Desk.bind (permissionless), v3.15 signature with the L2 launch number", N_TOKEN);
         // Failure: a contract that is not the recorded registry at these coordinates is refused.
         vm.expectRevert();
-        s.desk.bind(address(s.escrow), type(GameRegistry).creationCode, type(Params).creationCode, N_A, 1, N_A, 0);
+        _bind(address(s.escrow), N_A, 1, N_TOKEN);
         // Failure: the right registry at the wrong coordinates is refused.
         vm.expectRevert(InvalidProof.selector);
-        s.desk.bind(address(s.registry), type(GameRegistry).creationCode, type(Params).creationCode, N_A, 2, N_A, 0);
-        s.desk.bind(address(s.registry), type(GameRegistry).creationCode, type(Params).creationCode, N_A, 1, N_A, 0);
+        _bind(address(s.registry), N_A, 2, N_TOKEN);
+        _m5FakeMarket();
+        _bind(address(s.registry), N_A, 1, N_TOKEN);
         assertEq(address(s.desk.registry()), address(s.registry), "Desk.registry() == job A registry");
+        assertEq(s.desk.tokenLaunch(), N_TOKEN, "Desk.tokenLaunch() == L2 launch number");
         vm.expectRevert(AlreadyDone.selector);
-        s.desk.bind(address(s.registry), type(GameRegistry).creationCode, type(Params).creationCode, N_A, 1, N_A, 0);
+        _bind(address(s.registry), N_A, 1, N_TOKEN);
         console2.log("  check Desk.registry() == REGISTRY: ok", address(s.registry));
     }
 

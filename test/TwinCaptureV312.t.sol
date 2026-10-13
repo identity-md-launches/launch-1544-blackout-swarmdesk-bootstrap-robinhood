@@ -89,14 +89,15 @@ contract TwinCaptureV312Test is BaseTest {
     function _bind(Game memory g, uint64 launch) private returns (bool ok, bytes memory ret) {
         (ok, ret) = freshDesk.call(
             abi.encodeWithSignature(
-                "bind(address,bytes,bytes,uint64,uint8,uint64,uint8)",
+                "bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)",
                 address(g.registry),
                 registryCode,
                 type(Params).creationCode,
                 launch,
                 uint8(1),
                 launch,
-                uint8(0)
+                uint8(0),
+                desk.tokenLaunch()
             )
         );
     }

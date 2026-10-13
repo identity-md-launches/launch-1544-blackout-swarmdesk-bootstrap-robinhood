@@ -1,12 +1,12 @@
-# BLACKOUT v3.14 — final L1–L4 launch runbook
+# BLACKOUT v3.15 — final L1–L4 launch runbook
 
-Source only; no transaction is authorized by this change. This runbook replaces earlier M1–M13 deployment objectives. Use the accepted v3.14 source commit in `identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood`, based on `24bfb1d700159042da4b08262927727d37170540`. **NO SOURCE CHANGES** in any launch job.
+Source only; no transaction is authorized by this change. This runbook replaces earlier M1–M13 deployment objectives. Use the accepted v3.15 source commit in `identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood`, based on `210eafe33ecc3a083e14a2b2c77b3b2584eaaa43` (v3.14). v3.15 changes only `src/SwarmDesk.sol` (audit 031c93c4 finding 1): `bind` takes the L2 launch number and proves the registry's market against `LaunchFactory.positionOf`; every other creation hash is byte-identical to v3.14. **NO SOURCE CHANGES** in any launch job.
 
 X: https://x.com/IMDBlackout · Site: https://playblackout.xyz
 
 ## Frozen inputs and build
 
-Build exactly with this repository's unchanged `foundry.toml`: solc 0.8.26, optimizer true / 200 runs, Cancun, viaIR false, bytecode_hash none. `out/` and `out-launch/` must contain identical creation code. Run `python3 tools/pin_module_code.py --check`, `python3 tools/pin_swarm_code.py --check`, and `node tools/check_deploy_gate.mjs` before handing off. The deploy-gate tool also accepts paths to generated launch documents and checks every constructor in each. `docs/launch-v314-plan.json` is the machine-readable source plan, not a platform manifest; the platform prepares the actual manifest separately.
+Build exactly with this repository's unchanged `foundry.toml`: solc 0.8.26, optimizer true / 200 runs, Cancun, viaIR false, bytecode_hash none. `out/` and `out-launch/` must contain identical creation code. Run `python3 tools/pin_module_code.py --check`, `python3 tools/pin_swarm_code.py --check`, and `node tools/check_deploy_gate.mjs` before handing off. The deploy-gate tool takes the JSON plan (`node tools/check_deploy_gate.mjs docs/launch-v314-plan.json`, also its default), never this markdown runbook: it walks every `constructorArgs` array of a JSON launch document and refuses any literal IMD protocol address. `docs/launch-v314-plan.json` is the machine-readable source plan, not a platform manifest; the platform prepares the actual manifest separately.
 
 GAME_CONFIG_HASH is unchanged: **0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3**. Endowment is **200000000000000000000000000**. The existing private STARTER_ROOT, FREE_ROOT and SNAPSHOT_BLOCK remain unchanged and are supplied only for L3; they were already symbolic inputs in this repository. Before L3, verify `keccak256(abi.encode(bytes32 STARTER_ROOT, bytes32 FREE_ROOT, uint256 SNAPSHOT_BLOCK, uint256 ENDOWMENT))` equals that exact hash. A mismatch stops the launch; never substitute rehearsal roots or alter the commitment.
 
@@ -20,7 +20,7 @@ Creation-code hashes exclude constructor words. CREATE2 prediction uses the crea
 
 | Launch | Contract | Creation-code hash (without constructor words) | Runtime bytes |
 |---|---|---|---|
-| L1 | SwarmDesk | `0x2573ebbe036cbb372112a707611204bbc7f679484b83d99f387cb2dad0e1135e` | 21412 |
+| L1 | SwarmDesk | `0x3731f03eac78693477b4630fa5ebb8768bad1fbbc8f0e8d6904e12db2a76cc91` | 22104 |
 | L1 | EndowmentEscrow | `0x8120758fa38683db9af5b5dbd28c6bd5682f58f160e36b1fc951815082101087` | 5008 |
 | L2 | V4Market | `0xb3a295abe415ce500a185349e2b831e67d06993d647b3831babacdfc96fb00d3` | 21259 |
 | L3 | Params | `0x26c9f36af040b02eba9644f52daeed84fae4e42eab9bdb23277d0bb28c6dc6c0` | 3118 |
@@ -47,17 +47,18 @@ Each complete objective below includes its exact ordered constructor words, expe
 ### L1. Desk + escrow
 
 ```text
-BLACKOUT v3.14 L1 on Robinhood Chain (4663). NO SOURCE CHANGES.
-Source: accepted v3.14 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
+BLACKOUT v3.15 L1 on Robinhood Chain (4663). NO SOURCE CHANGES.
+Source: accepted v3.15 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
 Deploy SwarmDesk at index 0 then EndowmentEscrow at index 1 in ONE evm_contracts launch. Resolve the escrow Desk argument as $contract:SwarmDesk from this same launch. Return both addresses, their indices and this single launch number.
+The Desk is bound after L3 with the v3.15 signature bind(REGISTRY, registryCreationCode, paramsCreationCode, N_A, 1, N_A, 0, N_TOKEN): the last word is the recorded L2 launch number, and bind reads LaunchFactory.positionOf(N_TOKEN) (compiled-in 0xa25b…4645) and refuses any registry whose market is not the hook that record names for the registry's token. A market that only echoes desk(), token() and gameConfigHash() cannot bind. Keep the L2 launch number with the L1/L3 outputs for the keeper (wiring.tokenLaunch).
 GAME_CONFIG_HASH: 0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3.
 Exact ordered constructor words and expected creation hashes:
 [0] SwarmDesk ["0x6f7261636c652e72657175657374406f7261636c652d31000000000000000000","5391989333430298100116863486635657822062725418115979424500284366258177","0x2fc5a57f2c5f7bc083ea8ac5016234f1a0b1c68a514e5d921956cc57948534ef","0xc13efed8438aab53ea052a4507def2dc4ce9856765520dfa28c66daa59cfc11d","0x00e69e4445c7ca7256338293f9f9cea439fd2beb1959d1d43ebec7b14493e2f6","0xc0ae7511b06744cf7ccadc6b60ff9ff96cb7234cf32988850df33324861cc8df","0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"]
-Creation hash: 0x2573ebbe036cbb372112a707611204bbc7f679484b83d99f387cb2dad0e1135e
+Creation hash: 0x3731f03eac78693477b4630fa5ebb8768bad1fbbc8f0e8d6904e12db2a76cc91
 [1] EndowmentEscrow ["$contract:SwarmDesk"]
 Creation hash: 0x8120758fa38683db9af5b5dbd28c6bd5682f58f160e36b1fc951815082101087
 No literal IMD protocol addresses may appear as constructor words. Protocol endpoints are compiled in; allowed platform placeholders and named contract references stay as shown.
-Accepted findings (verbatim):
+Accepted findings (verbatim, docs/accepted-v315.md):
 - Accepted — RewardPool shortfall: repair an accounting shortfall with a plain token transfer to RewardPool; `donate` is not the shortfall-repair path.
 - Accepted — Exact-input swaps only: V4Market intentionally rejects exact-output swaps; routers and integrations must request exact input with a minimum output.
 - Accepted — `spot()` bounds: zero/uninitialized, underflowed, or prices above `1e40` tokens per ETH are unsupported and revert; operators must keep the launched pool inside these bounds.
@@ -66,21 +67,26 @@ Accepted findings (verbatim):
 - Accepted — Future-block randomness: pack, event, enhancement, and lottery entropy uses future native L2 blocks, with capture/rearm rules and sequencer/withholding risk; it is not verifiable randomness.
 - Accepted — Reserved Params keys: the reader-less keys listed in `docs/params-keys-v313.md` remain reserved and have no gameplay effect; valid proposals may still consume their cooldown.
 - Accepted — M-2 matching twin: after the Desk/hook/token/configuration checks, a matching factory-deployed twin can still win the one-time bind and orphan the honest graph; this is accepted as griefing under the pinned game rules, mitigated by binding immediately after L3 and checking before forwarding.
+- Accepted — 031c93c4 low 2, `GameRegistry.register` prefill by an identical copy: `register` is permissionless and accepts any factory coordinates whose CREATE2 result is the pinned module code constructed with this registry, so a byte-identical copy launched through the ProjectFactory could take a role before the keeper registers the recorded job A/B module; the copy runs the same pinned code against the same registry, no authority or funds move, and the keeper registers every role immediately after each launch is recorded and verifies `module(role)` against the recorded addresses before any further wiring.
+- Accepted — 031c93c4 low 3, `Season.rollover` before `finalize`: once a week's claim deadline passes, its unclaimed pot can be rolled into the current week whether or not that week was finalized, so a week nobody finalized rolls its whole pot forward instead of paying its winners; mitigated by the keeper finalizing every week (finalize, then rollover, in its weekly pass), and a rollover only moves the pot to later players, never out of the game.
+- Accepted — 031c93c4 low 4, `FeeRouter.executeSells` sweep rollback: the heartbeat-excess sweep to RewardPool at the top of `executeSells` shares the transaction with the sell, so a sell that reverts (unfillable minimum, market failure) also rolls the sweep back; the sweep repeats on the next successful call and no value is lost.
+- Accepted — 031c93c4 info 5: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
+- Accepted — 031c93c4 info 6: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
 Project: https://x.com/IMDBlackout · https://playblackout.xyz
 ```
 
 ### L2. Token + hook
 
 ```text
-BLACKOUT v3.14 L2 on Robinhood Chain (4663). NO SOURCE CHANGES.
-Source: accepted v3.14 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
+BLACKOUT v3.15 L2 on Robinhood Chain (4663). NO SOURCE CHANGES.
+Source: accepted v3.15 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
 Deploy the platform token plus V4Market hook using onchain univ4_hook, pairWith eth, economics poolBps 7000 and remainderTo <L1_ENDOWMENT_ESCROW>. Platform pool fee 12500, tick spacing 60. Paying wallet 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007 receives the platform 1% via LaunchFactory.claimFees; the platform keeps 0.25%. The hook adds its 1% rewards share after the stepped launch tax and its existing sell surcharge. Omit owner and initialMarketCapWei. Return token, hook, launch number and pool key.
 GAME_CONFIG_HASH: 0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3.
 Exact ordered constructor words and expected creation hashes:
 [0] V4Market ["$poolManager","$token","12500","60","$factory","<L1_SWARM_DESK>","0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"]
 Creation hash: 0xb3a295abe415ce500a185349e2b831e67d06993d647b3831babacdfc96fb00d3
 No literal IMD protocol addresses may appear as constructor words. Protocol endpoints are compiled in; allowed platform placeholders and named contract references stay as shown.
-Accepted findings (verbatim):
+Accepted findings (verbatim, docs/accepted-v315.md):
 - Accepted — RewardPool shortfall: repair an accounting shortfall with a plain token transfer to RewardPool; `donate` is not the shortfall-repair path.
 - Accepted — Exact-input swaps only: V4Market intentionally rejects exact-output swaps; routers and integrations must request exact input with a minimum output.
 - Accepted — `spot()` bounds: zero/uninitialized, underflowed, or prices above `1e40` tokens per ETH are unsupported and revert; operators must keep the launched pool inside these bounds.
@@ -89,15 +95,20 @@ Accepted findings (verbatim):
 - Accepted — Future-block randomness: pack, event, enhancement, and lottery entropy uses future native L2 blocks, with capture/rearm rules and sequencer/withholding risk; it is not verifiable randomness.
 - Accepted — Reserved Params keys: the reader-less keys listed in `docs/params-keys-v313.md` remain reserved and have no gameplay effect; valid proposals may still consume their cooldown.
 - Accepted — M-2 matching twin: after the Desk/hook/token/configuration checks, a matching factory-deployed twin can still win the one-time bind and orphan the honest graph; this is accepted as griefing under the pinned game rules, mitigated by binding immediately after L3 and checking before forwarding.
+- Accepted — 031c93c4 low 2, `GameRegistry.register` prefill by an identical copy: `register` is permissionless and accepts any factory coordinates whose CREATE2 result is the pinned module code constructed with this registry, so a byte-identical copy launched through the ProjectFactory could take a role before the keeper registers the recorded job A/B module; the copy runs the same pinned code against the same registry, no authority or funds move, and the keeper registers every role immediately after each launch is recorded and verifies `module(role)` against the recorded addresses before any further wiring.
+- Accepted — 031c93c4 low 3, `Season.rollover` before `finalize`: once a week's claim deadline passes, its unclaimed pot can be rolled into the current week whether or not that week was finalized, so a week nobody finalized rolls its whole pot forward instead of paying its winners; mitigated by the keeper finalizing every week (finalize, then rollover, in its weekly pass), and a rollover only moves the pot to later players, never out of the game.
+- Accepted — 031c93c4 low 4, `FeeRouter.executeSells` sweep rollback: the heartbeat-excess sweep to RewardPool at the top of `executeSells` shares the transaction with the sell, so a sell that reverts (unfillable minimum, market failure) also rolls the sweep back; the sweep repeats on the next successful call and no value is lost.
+- Accepted — 031c93c4 info 5: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
+- Accepted — 031c93c4 info 6: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
 Project: https://x.com/IMDBlackout · https://playblackout.xyz
 ```
 
 ### L3. Job A
 
 ```text
-BLACKOUT v3.14 L3 on Robinhood Chain (4663). NO SOURCE CHANGES.
-Source: accepted v3.14 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
-Deploy job A as ONE evm_contracts launch of eight contracts in exactly the listed order. Resolve $contract:Params and $contract:GameRegistry by name inside this launch. Use the unchanged private roots/snapshot only after checking their committed hash. Return all addresses, indices and launch number. The keeper must bind SwarmDesk immediately when this launch is recorded, then register roles 0–5.
+BLACKOUT v3.15 L3 on Robinhood Chain (4663). NO SOURCE CHANGES.
+Source: accepted v3.15 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
+Deploy job A as ONE evm_contracts launch of eight contracts in exactly the listed order. Resolve $contract:Params and $contract:GameRegistry by name inside this launch. Use the unchanged private roots/snapshot only after checking their committed hash. Return all addresses, indices and launch number. The keeper must bind SwarmDesk immediately when this launch is recorded, with bind(REGISTRY, registryCode, paramsCode, N_A, 1, N_A, 0, N_TOKEN) where N_TOKEN is the recorded L2 launch number, then register roles 0–5.
 GAME_CONFIG_HASH: 0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3.
 Exact ordered constructor words and expected creation hashes:
 [0] Params ["<L1_SWARM_DESK>","200","1000000000000000000"]
@@ -117,7 +128,7 @@ Creation hash: 0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737
 [7] StarterClaim ["$contract:GameRegistry"]
 Creation hash: 0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90
 No literal IMD protocol addresses may appear as constructor words. Protocol endpoints are compiled in; allowed platform placeholders and named contract references stay as shown.
-Accepted findings (verbatim):
+Accepted findings (verbatim, docs/accepted-v315.md):
 - Accepted — RewardPool shortfall: repair an accounting shortfall with a plain token transfer to RewardPool; `donate` is not the shortfall-repair path.
 - Accepted — Exact-input swaps only: V4Market intentionally rejects exact-output swaps; routers and integrations must request exact input with a minimum output.
 - Accepted — `spot()` bounds: zero/uninitialized, underflowed, or prices above `1e40` tokens per ETH are unsupported and revert; operators must keep the launched pool inside these bounds.
@@ -126,14 +137,19 @@ Accepted findings (verbatim):
 - Accepted — Future-block randomness: pack, event, enhancement, and lottery entropy uses future native L2 blocks, with capture/rearm rules and sequencer/withholding risk; it is not verifiable randomness.
 - Accepted — Reserved Params keys: the reader-less keys listed in `docs/params-keys-v313.md` remain reserved and have no gameplay effect; valid proposals may still consume their cooldown.
 - Accepted — M-2 matching twin: after the Desk/hook/token/configuration checks, a matching factory-deployed twin can still win the one-time bind and orphan the honest graph; this is accepted as griefing under the pinned game rules, mitigated by binding immediately after L3 and checking before forwarding.
+- Accepted — 031c93c4 low 2, `GameRegistry.register` prefill by an identical copy: `register` is permissionless and accepts any factory coordinates whose CREATE2 result is the pinned module code constructed with this registry, so a byte-identical copy launched through the ProjectFactory could take a role before the keeper registers the recorded job A/B module; the copy runs the same pinned code against the same registry, no authority or funds move, and the keeper registers every role immediately after each launch is recorded and verifies `module(role)` against the recorded addresses before any further wiring.
+- Accepted — 031c93c4 low 3, `Season.rollover` before `finalize`: once a week's claim deadline passes, its unclaimed pot can be rolled into the current week whether or not that week was finalized, so a week nobody finalized rolls its whole pot forward instead of paying its winners; mitigated by the keeper finalizing every week (finalize, then rollover, in its weekly pass), and a rollover only moves the pot to later players, never out of the game.
+- Accepted — 031c93c4 low 4, `FeeRouter.executeSells` sweep rollback: the heartbeat-excess sweep to RewardPool at the top of `executeSells` shares the transaction with the sell, so a sell that reverts (unfillable minimum, market failure) also rolls the sweep back; the sweep repeats on the next successful call and no value is lost.
+- Accepted — 031c93c4 info 5: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
+- Accepted — 031c93c4 info 6: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
 Project: https://x.com/IMDBlackout · https://playblackout.xyz
 ```
 
 ### L4. Job B
 
 ```text
-BLACKOUT v3.14 L4 on Robinhood Chain (4663). NO SOURCE CHANGES.
-Source: accepted v3.14 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
+BLACKOUT v3.15 L4 on Robinhood Chain (4663). NO SOURCE CHANGES.
+Source: accepted v3.15 commit of identity-md-launches/launch-1544-blackout-swarmdesk-bootstrap-robinhood. Build with the unchanged repo foundry.toml: solc 0.8.26, optimizer 200, cancun, viaIR false, bytecode_hash none.
 Deploy job B as ONE evm_contracts launch of eight contracts in exactly the listed order. Each argument is the recorded L3 GameRegistry already bound to the L1 Desk. Return all addresses, indices and launch number. The keeper registers roles 6–13 and completes hook binding, escrow forwarding and endowment funding before executing any oracle answer.
 GAME_CONFIG_HASH: 0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3.
 Exact ordered constructor words and expected creation hashes:
@@ -154,7 +170,7 @@ Creation hash: 0xb3e89ec00b8ad51904cdac336644a6025ceea25c15fa931cac2ad13d89dc0bb
 [7] Billboards ["<L3_GAME_REGISTRY>"]
 Creation hash: 0x3cb8b542f7baa025b6db7f2a4864288a594d05e75b9b4e9ec66416c1fe52aa60
 No literal IMD protocol addresses may appear as constructor words. Protocol endpoints are compiled in; allowed platform placeholders and named contract references stay as shown.
-Accepted findings (verbatim):
+Accepted findings (verbatim, docs/accepted-v315.md):
 - Accepted — RewardPool shortfall: repair an accounting shortfall with a plain token transfer to RewardPool; `donate` is not the shortfall-repair path.
 - Accepted — Exact-input swaps only: V4Market intentionally rejects exact-output swaps; routers and integrations must request exact input with a minimum output.
 - Accepted — `spot()` bounds: zero/uninitialized, underflowed, or prices above `1e40` tokens per ETH are unsupported and revert; operators must keep the launched pool inside these bounds.
@@ -163,6 +179,11 @@ Accepted findings (verbatim):
 - Accepted — Future-block randomness: pack, event, enhancement, and lottery entropy uses future native L2 blocks, with capture/rearm rules and sequencer/withholding risk; it is not verifiable randomness.
 - Accepted — Reserved Params keys: the reader-less keys listed in `docs/params-keys-v313.md` remain reserved and have no gameplay effect; valid proposals may still consume their cooldown.
 - Accepted — M-2 matching twin: after the Desk/hook/token/configuration checks, a matching factory-deployed twin can still win the one-time bind and orphan the honest graph; this is accepted as griefing under the pinned game rules, mitigated by binding immediately after L3 and checking before forwarding.
+- Accepted — 031c93c4 low 2, `GameRegistry.register` prefill by an identical copy: `register` is permissionless and accepts any factory coordinates whose CREATE2 result is the pinned module code constructed with this registry, so a byte-identical copy launched through the ProjectFactory could take a role before the keeper registers the recorded job A/B module; the copy runs the same pinned code against the same registry, no authority or funds move, and the keeper registers every role immediately after each launch is recorded and verifies `module(role)` against the recorded addresses before any further wiring.
+- Accepted — 031c93c4 low 3, `Season.rollover` before `finalize`: once a week's claim deadline passes, its unclaimed pot can be rolled into the current week whether or not that week was finalized, so a week nobody finalized rolls its whole pot forward instead of paying its winners; mitigated by the keeper finalizing every week (finalize, then rollover, in its weekly pass), and a rollover only moves the pot to later players, never out of the game.
+- Accepted — 031c93c4 low 4, `FeeRouter.executeSells` sweep rollback: the heartbeat-excess sweep to RewardPool at the top of `executeSells` shares the transaction with the sell, so a sell that reverts (unfillable minimum, market failure) also rolls the sweep back; the sweep repeats on the next successful call and no value is lost.
+- Accepted — 031c93c4 info 5: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
+- Accepted — 031c93c4 info 6: (copy the finding text verbatim from audit 031c93c4; only its number was supplied to the v3.15 job).
 Project: https://x.com/IMDBlackout · https://playblackout.xyz
 ```
 
@@ -170,7 +191,7 @@ Project: https://x.com/IMDBlackout · https://playblackout.xyz
 
 1. After L1, check `Desk.registry() == 0`, all `oracleConfig()` endpoints match Robinhood.sol, and the binding hash, 200 bps heartbeat and 1 ETH cap match this runbook. Check `Escrow.desk()` equals the L1 Desk and `forwarded()` is false.
 2. After L2, check `(ETH, TOKEN, 12500, 60, HOOK)`, `manager()` and `launcher()` match the pinned PoolManager and LaunchFactory, `desk()` and `gameConfigHash()` match L1, and `initializedAt() != 0`. The escrow must hold at least 200,000,000e18 tokens; liquidity dust may make the balance larger.
-3. Immediately after L3, call `Desk.bind(REGISTRY, registryCreationCode, paramsCreationCode, N_A, 1, N_A, 0)` using the v3.14 artifacts. Confirm `Desk.registry() == REGISTRY`, registry token/market/Params/roots/snapshot, and `Params.swarmWallet() == DESK`. Then `GameRegistry.register(role, N_A, role + 2, creationCode)` for roles 0–5. Keep eligibility lists private until binding is verified. If a different registry is bound, stop; do not forward funds or publish wiring. See `docs/m2-trust-assumption.md`.
+3. Immediately after L3, call `Desk.bind(REGISTRY, registryCreationCode, paramsCreationCode, N_A, 1, N_A, 0, N_TOKEN)` using the v3.15 artifacts, where `N_TOKEN` is the recorded L2 launch number (`keeper/wiring.json` `tokenLaunch`). The Desk reads `LaunchFactory.positionOf(N_TOKEN)` and requires it to name `(ETH, TOKEN, 12500, 60, HOOK)` with `HOOK == REGISTRY.market()` and `TOKEN == REGISTRY.token()`; check that record yourself first with `cast call 0xa25b…4645 "positionOf(uint64)" N_TOKEN`. Confirm `Desk.registry() == REGISTRY`, `Desk.tokenLaunch() == N_TOKEN`, registry token/market/Params/roots/snapshot, and `Params.swarmWallet() == DESK`. Then `GameRegistry.register(role, N_A, role + 2, creationCode)` for roles 0–5. Keep eligibility lists private until binding is verified. If a different registry is bound, stop; do not forward funds or publish wiring. See `docs/m2-trust-assumption.md`.
 4. After L4, register roles 6–13 using `(role, N_B, role - 6, creationCode)`, and verify all fourteen modules. Call `V4Market.bindFeeRouter(FEE_ROUTER, N_A, 1)`, check `fees()` and `params()`, then call `flushFees()` if fees accumulated during launch.
 5. Recheck the bound registry, then `EndowmentEscrow.forward(REGISTRY, N_A, 1, registryCreationCode, N_A, 2, rewardPoolCreationCode)`. It transfers its entire token balance once to the authenticated RewardPool. Check escrow balance zero, `forwarded()`, and RewardPool balance ≥ principal; call `RewardPool.fundEndowment()` and check `endowed()` and the 42-day drip.
 6. Call `FarmRewards.advanceEpoch()` after funding and before announcing pack availability. The one-hour pack gate and 30-minute launch tax both start at L2 initialization, potentially hours before L4 is available. The tax may have ended by game activation; the clock never resets. A keeper should advance immediately once the complete graph is ready, not wait for another hour.
@@ -181,8 +202,8 @@ Project: https://x.com/IMDBlackout · https://playblackout.xyz
 
 ## Rehearsal and limits
 
-Run `tools/rehearse_v311.sh https://robinhood.drpc.org artifacts/v314/rehearsal.log` (alternative: `https://robinhood-rpc.publicnode.com`). The script compiles before taking a fresh local Anvil fork (public endpoints may prune historical state) and sends no upstream transactions. Its four test-only launch numbers are 777001–777004, asserted unrecorded first. L1 submits both contracts in one real ProjectFactory call; L2 uses the real LaunchFactory/PoolManager; L3/L4 use the real factory and registry. Rehearsal roots are explicitly test-only and never replace the frozen production preimage.
+Run `tools/rehearse_v311.sh https://robinhood.drpc.org artifacts/v315/rehearsal.log` (alternative: `https://robinhood-rpc.publicnode.com`). The script compiles before taking a fresh local Anvil fork (public endpoints may prune historical state) and sends no upstream transactions. Its five test-only launch numbers are 777001–777005, asserted unrecorded first (777005 is a fake-market registry that the v3.15 bind must refuse). L1 submits both contracts in one real ProjectFactory call; L2 uses the real LaunchFactory/PoolManager; L3/L4 use the real factory and registry. Rehearsal roots are explicitly test-only and never replace the frozen production preimage.
 
-The fixed attester remains in the deployed Desk configuration. Only on the local fork, an ERC1271 test signer is etched at that address so valid/invalid signed answers can be exercised without the real private key; native L2 blockhash inputs are also controlled for repeatable entropy tests. This proves constructor decoding, recorded deployment, code proofs, wiring, endowment, fee settlement and keeper paths. It does not prove the live attester service, paid admission, schedule delivery or launch-day gas. See `report.md` v3.14 and the committed logs for results. No waits for paid launch queues occur in this source task.
+The fixed attester remains in the deployed Desk configuration. Only on the local fork, an ERC1271 test signer is etched at that address so valid/invalid signed answers can be exercised without the real private key; native L2 blockhash inputs are also controlled for repeatable entropy tests. This proves constructor decoding, recorded deployment, code proofs, wiring, endowment, fee settlement and keeper paths. It does not prove the live attester service, paid admission, schedule delivery or launch-day gas. See `report.md` v3.15 and the committed logs for results. No waits for paid launch queues occur in this source task.
 
-The v3.14 run passed all five fork tests at block 87523437 on 2026-10-13; all four measured launch costs were below 0.01 ETH at 0.020148 gwei. Full figures and the fork limitations are recorded in `report.md`.
+The v3.15 run passed all five fork tests at block 87556133 on 2026-10-13 (`artifacts/v315/rehearsal.log`), including the real `LaunchFactory.positionOf(777002)` record naming the rehearsal token, hook and paying wallet, the refusal of a fake-market registry launched through the real ProjectFactory (777005), and the refusal of the honest registry under launch 1316's real record or an unrecorded number; all four measured launch costs were below 0.01 ETH at 0.020772 gwei. Full figures and the fork limitations are recorded in `report.md`.

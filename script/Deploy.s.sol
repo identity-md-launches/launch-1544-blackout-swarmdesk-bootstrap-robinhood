@@ -20,6 +20,7 @@ import {Enhancement} from "../src/Enhancement.sol";
 import {Billboards} from "../src/Billboards.sol";
 import {Civic} from "../src/Civic.sol";
 import {Season} from "../src/Season.sol";
+import {PoolKey} from "../src/interfaces/IV4.sol";
 import "../src/lib/Errors.sol";
 
 /// @dev Local fixture for the platform's predictContract/CREATE2 behavior, never a launch target.
@@ -64,6 +65,34 @@ interface IFixtureMarket {
 contract LocalLaunchRecords {
     function isRecorded(uint64 n) external view returns (bool) {
         return LocalApplicationFactory(Robinhood.PROJECT_FACTORY).isRecorded(n);
+    }
+}
+
+/// @dev Local stand-in for the LaunchFactory's `positionOf(uint64)` record (v3.15), the eight static words the
+/// real factory returns on 4663 for a recorded univ4_hook launch. Tests record what a launch would have written;
+/// an unrecorded number reads as zeros exactly as on chain. Never a launch target.
+contract LocalLaunchFactory {
+    struct Position {
+        PoolKey key;
+        int24 tickLower;
+        int24 tickUpper;
+        address requester;
+    }
+
+    mapping(uint64 => Position) private positions;
+
+    function record(uint64 launchNumber, address currency0, address token, address hook, address requester) external {
+        if (launchNumber == 0 || positions[launchNumber].key.hooks != address(0)) revert AlreadyDone();
+        positions[launchNumber] = Position(PoolKey(currency0, token, 12500, 60, hook), -887220, 128940, requester);
+    }
+
+    function positionOf(uint64 launchNumber)
+        external
+        view
+        returns (PoolKey memory key, int24 tickLower, int24 tickUpper, address requester)
+    {
+        Position storage p = positions[launchNumber];
+        return (p.key, p.tickLower, p.tickUpper, p.requester);
     }
 }
 
@@ -116,10 +145,15 @@ contract Deploy is Script {
             vm.etch(Robinhood.PROJECT_FACTORY, type(LocalApplicationFactory).runtimeCode);
             vm.etch(Robinhood.PROJECT_REGISTRY, type(LocalLaunchRecords).runtimeCode);
         }
+        if (Robinhood.LAUNCH_FACTORY.code.length == 0) {
+            vm.etch(Robinhood.LAUNCH_FACTORY, type(LocalLaunchFactory).runtimeCode);
+        }
         LocalApplicationFactory factory = LocalApplicationFactory(Robinhood.PROJECT_FACTORY);
         baseLaunch = nextLaunch == 0 ? 1 : nextLaunch;
         nextLaunch = baseLaunch + 1000;
         SwarmDesk desk = _desk(factory, c);
+        // v3.15: the fixture token launch (baseLaunch + 3) records the fixture market as the token's hook.
+        LocalLaunchFactory(Robinhood.LAUNCH_FACTORY).record(baseLaunch + 3, address(0), c.token, c.market, msg.sender);
         d.params = Params(
             factory.deploy(
                 baseLaunch,
@@ -139,7 +173,8 @@ contract Deploy is Script {
             baseLaunch,
             1,
             baseLaunch,
-            0
+            0,
+            baseLaunch + 3
         );
         address[14] memory modules = _modules(factory, address(d.registry));
         d.pool = RewardPool(modules[0]);

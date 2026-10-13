@@ -1,8 +1,8 @@
 {
-  "version": "3.14",
+  "version": "3.15",
   "chainId": 4663,
   "gameConfigHash": "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3",
-  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records.",
+  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records. v3.15 changes only the SwarmDesk creation hash (bind proves the hook against LaunchFactory.positionOf); the other 18 hashes are byte-identical to v3.14.",
   "launches": [
     {
       "id": "L1",
@@ -19,7 +19,7 @@
             "0xc0ae7511b06744cf7ccadc6b60ff9ff96cb7234cf32988850df33324861cc8df",
             "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"
           ],
-          "creationHash": "0x2573ebbe036cbb372112a707611204bbc7f679484b83d99f387cb2dad0e1135e"
+          "creationHash": "0x3731f03eac78693477b4630fa5ebb8768bad1fbbc8f0e8d6904e12db2a76cc91"
         },
         {
           "name": "EndowmentEscrow",

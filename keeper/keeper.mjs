@@ -400,9 +400,10 @@ async function wire() {
   if (run('bind-desk')) {
     const bound = await addr(w.desk, 'registry()');
     if (same(bound, ZERO)) {
-      const r = await attemptWithCode('SwarmDesk.bind', w.desk, 'bind(address,bytes,bytes,uint64,uint8,uint64,uint8)', {
+      if (!w.tokenLaunch) throw new Error('wiring.tokenLaunch (the L2 token launch number) is required: v3.15 bind proves the hook against LaunchFactory.positionOf');
+      const r = await attemptWithCode('SwarmDesk.bind', w.desk, 'bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)', {
         codes: registryCodes.map((rc, i) => ({ dir: rc.dir, code: [rc.code, (paramsCodes[i] || paramsCodes[0]).code] })),
-        args: ([rCode, pCode]) => [registry, rCode, pCode, registryCo.launch, registryCo.index, paramsCo.launch, paramsCo.index],
+        args: ([rCode, pCode]) => [registry, rCode, pCode, registryCo.launch, registryCo.index, paramsCo.launch, paramsCo.index, BigInt(w.tokenLaunch)],
       });
       report.push(r);
       if (!r.ok) { print(report); throw new Error(`Desk.bind failed: ${r.reason}. Do not continue wiring.`); }

@@ -1,6 +1,6 @@
 # M-2 twin front-run of `SwarmDesk.bind`: trust assumption (for the audit judge)
 
-BLACKOUT v3.14. Source only. The binding checks now also require a hook with matching Desk, token and game configuration. This document covers finding M-2 of the v3.10 independent review
+BLACKOUT v3.15. Source only. The binding checks require a hook with matching Desk, token and game configuration (v3.14) and, since v3.15 (audit 031c93c4 finding 1), the LaunchFactory's own launch record naming that hook for the registry's token. This document covers finding M-2 of the v3.10 independent review
 ([docs/review-v39-independent.md](review-v39-independent.md)). It says what an attacker who wins the
 `SwarmDesk.bind` race can do and what they cannot, rates the severity, and gives the operational mitigation the
 runbook ([launch-v39.md](../launch-v39.md), L3 and post-L4 wiring) applies. Every claim below cites the code or a test.
@@ -22,6 +22,10 @@ registry that meets all of these:
   given coordinates, and it has code;
 - its market has code, `IBoundHook(market).desk()` is this Desk, `token()` equals the registry token,
   and `gameConfigHash()` equals the Desk commitment; mismatches revert `InvalidProof`.
+- (v3.15) `LaunchFactory.positionOf(tokenLaunch)`, the record `claimFees(tokenLaunch)` keys on and only the
+  factory's `launch` writes, names the registry's token as currency1 of an ETH-paired pool and the registry's
+  market as its hook. A market that merely echoes the three values has no record naming it and reverts
+  `InvalidProof` (`test/AuditV315.t.sol`, rehearsal `_m5FakeMarket` against the real factory).
 
 IMD launch numbers cannot be reserved, so nothing on chain separates the honest job A from a byte-identical
 "twin" job launched through the same factory. Whoever calls `bind` first with a valid registry wins.
@@ -54,7 +58,7 @@ IMD launch numbers cannot be reserved, so nothing on chain separates the honest 
 | Withdraw tokens from the twin RewardPool | **No** | `pay`, `reserve` and `recycle` are `onlyRewards` (the registry's pinned FarmRewards, role 1). The attacker gets `Unauthorized`, and before a FarmRewards is registered nothing can pay at all. There is no owner, withdrawal or sweep (`testTwinCaptureCannotPayAttacker`) |
 | Change emission, prices or pauses | **No** | The twin's Params must name the same Desk as `swarmWallet` (checked in `bind`). The Desk acts only on attested oracle answers, inside hard-coded bounds |
 | Take hook ETH fees | **No** | `V4Market.bindFeeRouter` accepts only the bound registry's pinned FeeRouter (role 6). `FeeRouter` routes ETH into game rewards (pull payments to players). The team's 1% comes from `LaunchFactory.claimFees`, which goes to the paying wallet whichever registry is bound |
-| Change the token or the pool | **Mismatched bindings are rejected** | v3.14 checks that the market has code and its `desk()`, `token()` and `gameConfigHash()` match this Desk and registry; an EOA or foreign Desk/token/configuration reverts `InvalidProof`. These are interface consistency checks, not a separate hook bytecode proof (`testTwinWithForeignMarketCannotBind`, `testTwinWithForeignTokenCannotBind`, `testHookWithForeignConfigurationCannotBind`, `testEOAMarketCannotBind`) |
+| Change the token or the pool | **No** | v3.14 checks that the market has code and its `desk()`, `token()` and `gameConfigHash()` match this Desk and registry; v3.15 additionally requires the LaunchFactory record for the supplied token launch to name the registry's token and that market as its hook, so a copy that echoes the three values cannot capture the escrow forward (`testFakeMarketEchoingDeskTokenAndHashCannotBind`, `testAttackerLaunchRecordNamesAnotherTokenAndIsRefused`, `testRecordWithOtherHookOrOtherPairCurrencyIsRefused`, `testRealHookRecordedByTheLaunchFactoryBinds`, plus the v3.14 tests) |
 | Leave the honest job A/B contracts orphaned | **Yes** | The honest registry is never bound, so its pool never receives the endowment (`fundEndowment` reverts `InsufficientBalance`) and the hook never binds its FeeRouter |
 
 For the matching pinned-game twin tested here, **no privileged token or ETH withdrawal becomes available to the attacker.** The endowment still sits in a RewardPool
@@ -75,9 +79,7 @@ job A/B launches are wasted, the published wiring has to move to the twin regist
   only party that sees the roots before job A executes is the platform that runs it (the residual noted in the
   review). Trusting the platform not to front-run its own customer is the same trust the launch already puts in
   it for deploying the exact bytecode.
-- The v3.14 consistency fix closes the mismatched-hook/token cases; closing the remaining matching-twin race needs an on-chain fact only the honest launch has, such as a reserved launch
-  number (removed by the v3.8 brief) or a factory record of the payer (not in the factory's interface). Either
-  one would change the Desk pin and is the requester's decision.
+- The v3.14 consistency fix closes the mismatched-hook/token cases and the v3.15 record proof closes the fake-market case: a twin must now name the genuine token and the genuine hook, so the escrow can only ever forward to a RewardPool of a game built on the launched token and hook. Closing the remaining matching-twin race (same token, same hook, same roots) still needs an on-chain fact only the honest job A has, such as a reserved launch number (removed by the v3.8 brief) or a ProjectFactory record of the payer (not in that factory's interface). Either one would change the Desk pin and is the requester's decision.
 
 ## 5. Operational mitigation (in the runbook)
 

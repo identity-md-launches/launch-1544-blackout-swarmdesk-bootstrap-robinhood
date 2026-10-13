@@ -19,7 +19,7 @@ assert.throws(() => attestationValues({...doc, types: {OracleAttestation: doc.ty
 assert.throws(() => encodeSubmit(values, '0x1234'));
 // Wiring encoders.
 assert.equal(encodeFunction('register(uint256,uint64,uint256,bytes)', v.register.args), v.register.calldata);
-assert.equal(encodeFunction('bind(address,bytes,bytes,uint64,uint8,uint64,uint8)', v.bind.args), v.bind.calldata);
+assert.equal(encodeFunction('bind(address,bytes,bytes,uint64,uint8,uint64,uint8,uint64)', v.bind.args), v.bind.calldata);
 assert.equal(encodeFunction('forward(address,uint64,uint256,bytes,uint64,uint256,bytes)', v.forward.args), v.forward.calldata);
 assert.equal(encodeFunction('claimFees(uint64)', [1316]).slice(0, 10), '0xe0d0eac4');
 assert.equal(encodeFunction('bindFeeRouter(address,uint64,uint256)', [v.bind.args[0], 1401, 1]).slice(0, 10), '0x66777422');

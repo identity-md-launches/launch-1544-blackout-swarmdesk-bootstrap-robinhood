@@ -14,6 +14,8 @@ import "../src/lib/Errors.sol";
 contract SwarmDeskV37Test is BaseTest {
     MockSwarmIntake private intake;
     MockSwarmDelivery private delivery;
+    /// @dev v3.15: the fixture token launch number, read in setUp so no call sits between expectRevert and bind.
+    uint64 private fixtureTokenLaunch;
     uint256 private nonce;
 
     function launchFeatures() internal pure override returns (bool) {
@@ -22,6 +24,7 @@ contract SwarmDeskV37Test is BaseTest {
 
     function setUp() public override {
         super.setUp();
+        fixtureTokenLaunch = desk.tokenLaunch();
         SwarmDesk.OracleConfig memory o = desk.oracleConfig();
         MockSwarmIntake model = new MockSwarmIntake();
         vm.etch(o.intake, address(model).code);
@@ -323,7 +326,7 @@ contract SwarmDeskV37Test is BaseTest {
         (ok,) = address(desk).call(abi.encodeWithSignature("execute(address,bytes)", address(d.params), bytes("")));
         assertFalse(ok);
         vm.expectRevert(AlreadyDone.selector);
-        desk.bind(address(d.registry), "", "", 1, 1, 1, 0);
+        desk.bind(address(d.registry), "", "", 1, 1, 1, 0, fixtureTokenLaunch);
     }
 
     function testNextSlotAcceptsSameQuestionAndChangedExecutionBytesReject() public {
@@ -421,36 +424,36 @@ contract SwarmDeskV37Test is BaseTest {
             f.deploy(51, 1, bytes.concat(rCode, _registryArgs(address(p), d.registry.starterRoot(), address(f))))
         );
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), hex"ff", pCode, 51, 1, 51, 0);
+        fresh.bind(address(r), hex"ff", pCode, 51, 1, 51, 0, fixtureTokenLaunch);
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), rCode, hex"ff", 51, 1, 51, 0);
+        fresh.bind(address(r), rCode, hex"ff", 51, 1, 51, 0, fixtureTokenLaunch);
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(d.registry), rCode, pCode, 51, 1, 51, 0);
+        fresh.bind(address(d.registry), rCode, pCode, 51, 1, 51, 0, fixtureTokenLaunch);
         {
             GameRegistry spoof = _lookalike(address(p), d.registry.starterRoot(), address(f));
             vm.expectRevert(InvalidProof.selector);
-            fresh.bind(address(spoof), rCode, pCode, 51, 1, 51, 0);
+            fresh.bind(address(spoof), rCode, pCode, 51, 1, 51, 0, fixtureTokenLaunch);
         }
         {
             GameRegistry wrongRoot = _lookalike(address(p), keccak256("wrong root"), address(f));
             vm.expectRevert(InvalidProof.selector);
-            fresh.bind(address(wrongRoot), rCode, pCode, 51, 1, 51, 0);
+            fresh.bind(address(wrongRoot), rCode, pCode, 51, 1, 51, 0, fixtureTokenLaunch);
         }
         // Correct proof at the wrong coordinates fails; zero coordinates are refused outright.
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), rCode, pCode, 52, 1, 51, 0);
+        fresh.bind(address(r), rCode, pCode, 52, 1, 51, 0, fixtureTokenLaunch);
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 1);
+        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 1, fixtureTokenLaunch);
         vm.expectRevert(InvalidValue.selector);
-        fresh.bind(address(r), rCode, pCode, 0, 1, 51, 0);
+        fresh.bind(address(r), rCode, pCode, 0, 1, 51, 0, fixtureTokenLaunch);
         market.configureBinding(address(fresh), fresh.bindingConfig().gameConfigHash);
         vm.prank(bob);
-        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0);
+        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0, fixtureTokenLaunch);
         assertEq(address(fresh.registry()), address(r));
         assertEq(fresh.bindingConfig().registryLaunch, 51);
         assertEq(fresh.bindingConfig().paramsIndex, 0);
         vm.expectRevert(AlreadyDone.selector);
-        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0);
+        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0, fixtureTokenLaunch);
         vm.expectRevert(AlreadyDone.selector);
         f.deploy(51, 1, bytes.concat(rCode, abi.encode("different initcode")));
     }

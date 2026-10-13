@@ -17,6 +17,7 @@ import {PackSale} from "./PackSale.sol";
 import {Economy} from "./Economy.sol";
 import {ChainClock} from "./lib/ChainClock.sol";
 import {SwarmCode} from "./lib/SwarmCode.sol";
+import {PoolKey} from "./interfaces/IV4.sol";
 import "./lib/Errors.sol";
 
 interface ISwarmIntake {
@@ -50,6 +51,18 @@ interface IBoundHook {
 
 interface ISwarmRegistry is IGameRegistry {
     function factory() external view returns (address);
+}
+
+/// @dev The LaunchFactory's own record of a univ4_hook launch: the pool position that `claimFees(launchNumber)`
+/// collects from (v3.15, audit 031c93c4 finding 1). Only `launch` writes it, in the transaction that deploys the
+/// token and the hook, so it names the genuine hook of the genuine token. Read on Robinhood Chain (4663) at block
+/// 87523437 and later: `positionOf(1316)` = (IMD, token, 12500, 60, hook, -887220, 128940, requester), eight
+/// static words; an unrecorded number returns all zeros, which can never match a hook with code.
+interface ILaunchRecords {
+    function positionOf(uint64 launchNumber)
+        external
+        view
+        returns (PoolKey memory key, int24 tickLower, int24 tickUpper, address requester);
 }
 
 /// @notice BLACKOUT's only swarm authority. No owner, arbitrary calls, withdrawals or upgrades.
@@ -104,6 +117,8 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
     OracleConfig private config;
     BindingConfig private binding;
     IGameRegistry public registry;
+    /// @notice The LaunchFactory launch number whose record named the bound registry's token and hook (v3.15).
+    uint64 public tokenLaunch;
     mapping(uint8 => Result) public lastAnswer;
     mapping(uint8 => uint256) public acceptedSlotPlusOne;
     mapping(uint8 => uint256) public askedSlotPlusOne;
@@ -178,6 +193,8 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
     /// once and only from its deployer, so the recorded coordinates plus pinned creation code identify the
     /// only Registry/Params it can have created. The frozen roots/snapshot/endowment must match the
     /// commitment and Params must point back to this Desk. No launch number is known at construction.
+    /// v3.15: the registry's market must also be the hook the LaunchFactory recorded for `tokenLaunch_`, paired
+    /// with the registry's token (see `_proveHook`); a market that merely echoes this Desk's values is refused.
     function bind(
         address candidate,
         bytes calldata registryCode,
@@ -185,14 +202,40 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         uint64 registryLaunch,
         uint8 registryIndex,
         uint64 paramsLaunch,
-        uint8 paramsIndex
+        uint8 paramsIndex,
+        uint64 tokenLaunch_
     ) external {
         if (address(registry) != address(0)) revert AlreadyDone();
-        if (registryLaunch == 0 || paramsLaunch == 0 || registryIndex >= 8 || paramsIndex >= 8) revert InvalidValue();
+        if (registryLaunch == 0 || paramsLaunch == 0 || tokenLaunch_ == 0 || registryIndex >= 8 || paramsIndex >= 8) {
+            revert InvalidValue();
+        }
         if (!SwarmCode.isRegistry(keccak256(registryCode)) || !SwarmCode.isParams(keccak256(paramsCode))) {
             revert InvalidProof();
         }
         ISwarmRegistry r = ISwarmRegistry(candidate);
+        _proveRegistry(r, registryCode, paramsCode, registryLaunch, registryIndex, paramsLaunch, paramsIndex);
+        _proveHook(r, tokenLaunch_);
+        binding.registryLaunch = registryLaunch;
+        binding.registryIndex = registryIndex;
+        binding.paramsLaunch = paramsLaunch;
+        binding.paramsIndex = paramsIndex;
+        tokenLaunch = tokenLaunch_;
+        registry = r;
+        emit Bound(candidate);
+    }
+
+    /// @dev The v3.8–v3.14 registry proofs, unchanged: the candidate's factory and frozen configuration match the
+    /// commitment, its Params is the factory's CREATE2 result of the pinned code naming this Desk, and the
+    /// candidate itself is the factory's CREATE2 result of the pinned registry code with its own constructor tuple.
+    function _proveRegistry(
+        ISwarmRegistry r,
+        bytes calldata registryCode,
+        bytes calldata paramsCode,
+        uint64 registryLaunch,
+        uint8 registryIndex,
+        uint64 paramsLaunch,
+        uint8 paramsIndex
+    ) private view {
         if (
             r.factory() != binding.factory
                 || keccak256(abi.encode(r.starterRoot(), r.freeRoot(), r.snapshotBlock(), r.endowment()))
@@ -200,19 +243,23 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         ) revert InvalidProof();
         address p = _proveParams(paramsLaunch, paramsIndex, paramsCode);
         if (r.params() != p) revert InvalidProof();
-        if (_predictRegistry(r, p, registryLaunch, registryIndex, registryCode) != candidate) revert InvalidProof();
-        if (candidate.code.length == 0) revert InvalidProof();
+        if (_predictRegistry(r, p, registryLaunch, registryIndex, registryCode) != address(r)) revert InvalidProof();
+        if (address(r).code.length == 0) revert InvalidProof();
+    }
+
+    /// @dev The registry's market must have code and answer this Desk, the registry's token and the commitment
+    /// (v3.14), and (v3.15) it must be the hook of the LaunchFactory's record for `launch`, with the registry's
+    /// token as currency1 of an ETH-paired pool. Values the hook returns about itself prove nothing: the record is
+    /// written only by the LaunchFactory, in the launch that deployed both the token and the hook, so a copy
+    /// that echoes the three values has no record naming it. An unrecorded number reads as zeros.
+    function _proveHook(ISwarmRegistry r, uint64 launch) private view {
         IBoundHook h = IBoundHook(r.market());
         if (address(h).code.length == 0) revert InvalidProof();
         if (h.desk() != address(this) || h.token() != r.token() || h.gameConfigHash() != binding.gameConfigHash) {
             revert InvalidProof();
         }
-        binding.registryLaunch = registryLaunch;
-        binding.registryIndex = registryIndex;
-        binding.paramsLaunch = paramsLaunch;
-        binding.paramsIndex = paramsIndex;
-        registry = r;
-        emit Bound(candidate);
+        (PoolKey memory k,,,) = ILaunchRecords(Robinhood.LAUNCH_FACTORY).positionOf(launch);
+        if (k.currency0 != address(0) || k.currency1 != r.token() || k.hooks != address(h)) revert InvalidProof();
     }
 
     function _proveParams(uint64 launch, uint8 index, bytes calldata code) private view returns (address p) {
