@@ -88,7 +88,7 @@ contract SeasonAuditTest is BaseTest {
         vm.warp(d.season.deadline(0));
     }
 
-    function testWeeklyThreeDistinctTicketWinnersRarePackAndBestPrize() public {
+    function testWeeklyThreeDistinctTicketWinnersFuturePackAndBestPrize() public {
         _week();
         uint256 before_ = d.rewards.pending(alice);
         d.season.prepare(0, 64);
@@ -108,8 +108,19 @@ contract SeasonAuditTest is BaseTest {
         assertTrue(d.season.lotteryWon(0, makeAddr("carol")));
         assertEq(d.season.tickets(0, alice), 280_000);
         vm.prank(alice);
-        uint256 item = d.season.claimLottery(0);
-        assertGe(d.items.data(item).rarity, 2);
+        uint256 receipt = d.season.claimLottery(0);
+        uint256 beforeItems = d.items.ownedCount(alice);
+        (address player, uint64 target, uint256 count, uint256 opened,, bool guaranteed,,,) = d.packs.commits(receipt);
+        assertEq(player, alice);
+        assertEq(target, vm.getBlockNumber() + 2);
+        assertEq(count, 1);
+        assertEq(opened, 0);
+        assertTrue(guaranteed);
+        vm.expectRevert(TooEarly.selector);
+        d.packs.resolve(receipt, 1);
+        entropy();
+        d.packs.resolve(receipt, 1);
+        assertEq(d.items.ownedCount(alice), beforeItems + 3);
         vm.expectRevert(InvalidValue.selector);
         vm.prank(alice);
         d.season.claimLottery(0);
@@ -146,16 +157,22 @@ contract SeasonAuditTest is BaseTest {
         for (uint256 i; i < 15; ++i) {
             mintItem(alice, uint8(i % 12), 0);
         }
+        vm.prank(alice);
+        uint256 receipt = d.season.claimLottery(0);
+        assertTrue(d.season.lotteryClaimed(0, alice));
+        entropy();
+        d.packs.captureEntropy(receipt);
+        vm.expectRevert(InsufficientBalance.selector);
+        d.packs.resolve(receipt, 1);
         vm.expectRevert(InvalidValue.selector);
         vm.prank(alice);
         d.season.claimLottery(0);
-        assertFalse(d.season.lotteryClaimed(0, alice));
         step();
         vm.prank(alice);
         d.farm.expand(true);
-        vm.prank(alice);
-        d.season.claimLottery(0);
-        assertTrue(d.season.lotteryClaimed(0, alice));
+        uint256 beforeItems = d.items.ownedCount(alice);
+        d.packs.resolve(receipt, 1);
+        assertEq(d.items.ownedCount(alice), beforeItems + 3);
     }
 
     function testPackSupplyDropOnlyActiveFarmsAtDoublePace() public {

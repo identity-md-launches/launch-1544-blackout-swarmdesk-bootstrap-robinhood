@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
+import {Robinhood} from "../src/lib/Robinhood.sol";
+import {MockOracleSigner} from "./mocks/MockOracleSigner.sol";
 import {Test} from "forge-std/Test.sol";
 import {GameRegistry} from "../src/GameRegistry.sol";
 import {RewardPool} from "../src/RewardPool.sol";
@@ -40,10 +42,13 @@ abstract contract BaseTest is Test {
         bob = makeAddr("bob");
         swarm = makeAddr("swarm");
         team = 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007;
-        token = new MockToken();
+        vm.etch(Robinhood.IMD, type(MockToken).runtimeCode);
+        token = MockToken(Robinhood.IMD);
+        token.mint(address(this), 1_000_000_000 ether);
+        vm.etch(Robinhood.ATTESTER, address(new MockOracleSigner(vm.addr(0x123456))).code);
         market = new MockMarket(address(token));
         market.configureLaunch(launch - 1 hours, address(this));
-        bindingFactory = new LocalApplicationFactory();
+        bindingFactory = LocalApplicationFactory(Robinhood.PROJECT_FACTORY);
         token.transfer(address(market), 100_000_000 ether);
         address fixture = makeAddr("deployment script fixture");
         vm.etch(fixture, vm.getDeployedCode("Deploy.s.sol:Deploy"));
@@ -99,9 +104,9 @@ abstract contract BaseTest is Test {
     }
 
     function oracleFixture() internal returns (SwarmDesk.OracleConfig memory o) {
-        o.intake = makeAddr("intake");
-        o.delivery = makeAddr("delivery");
-        o.signer = vm.addr(0x123456);
+        o.intake = Robinhood.INTAKE;
+        o.delivery = Robinhood.DELIVERY;
+        o.signer = Robinhood.ATTESTER;
         o.asset = address(token);
         o.action = bytes32("oracle.request@oracle-1");
         o.maxPrice = 0.5 ether;
@@ -196,8 +201,7 @@ abstract contract BaseTest is Test {
                 keccak256(abi.encode(uint256(17), alice)),
                 freePackRoot(),
                 uint256(23_000_000),
-                uint256(0),
-                address(bindingFactory)
+                uint256(0)
             )
         );
         GameRegistry r = GameRegistry(bindingFactory.deploy(7, 1, code));

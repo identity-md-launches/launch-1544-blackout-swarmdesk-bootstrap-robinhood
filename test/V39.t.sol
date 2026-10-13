@@ -116,8 +116,8 @@ contract V39Test is BaseTest {
         assertEq(hook.PROJECT_BPS(), 100);
         assertEq(hook.projectBps(), 100);
         assertEq(hook.currentBuyTaxBps(), 100);
-        assertEq(hook.quote(1 ether), 0.99 ether);
-        assertEq(hook.quoteSell(1 ether), 0.99 ether);
+        assertEq(hook.quote(1 ether), 0.99 ether * 987500 / 1000000);
+        assertEq(hook.quoteSell(1 ether), 0.99 ether * 987500 / 1000000);
     }
 
     function testSellSurchargeStillProgressiveAndCappedAtFifteenPercent() public {
@@ -162,28 +162,13 @@ contract V39Test is BaseTest {
             assertFalse(ok);
         }
         vm.expectRevert(InvalidValue.selector);
-        new V4Market(
-            address(manager),
-            address(token),
-            12499,
-            60,
-            address(this),
-            address(bindingFactory),
-            address(desk),
-            bindingConfigHash()
-        );
+        new V4Market(address(manager), address(token), 12499, 60, address(this), address(desk), bindingConfigHash());
     }
 
     function testMarketFactoryConfigHasNoNetworkRecipient() public {
         MarketFactory factory = new MarketFactory();
         MarketFactory.Config memory c = MarketFactory.Config(
-            address(manager),
-            address(token),
-            60,
-            address(this),
-            address(bindingFactory),
-            address(desk),
-            bindingConfigHash()
+            address(manager), address(token), 60, address(this), address(desk), bindingConfigHash()
         );
         (bytes32 salt, address predicted) = factory.findSalt(c, 0, 100000);
         V4Market deployed = factory.deploy(c, salt);
@@ -196,9 +181,9 @@ contract V39Test is BaseTest {
     // ------------------------------------------------------------------ dual toolchain pins
 
     function testRegistryAcceptsEitherToolchainPinAndNothingElse() public {
-        LocalApplicationFactory f = new LocalApplicationFactory();
+        LocalApplicationFactory f = LocalApplicationFactory(address(d.registry.factory()));
         GameRegistry r = new GameRegistry(
-            address(token), address(d.params), address(market), keccak256("root"), freePackRoot(), 123, 0, address(f)
+            address(token), address(d.params), address(market), keccak256("root"), freePackRoot(), 123, 0
         );
         for (uint256 role; role < 14; ++role) {
             (bytes32 launchPin, bytes32 repoPin) = r.creationCodeHashes(role);

@@ -5,6 +5,13 @@ import {IMarket} from "../../src/interfaces/Interfaces.sol";
 
 contract MockMarket is IMarket {
     IERC20 public token;
+    address public desk;
+    bytes32 public gameConfigHash;
+
+    function configureBinding(address d, bytes32 h) external {
+        desk = d;
+        gameConfigHash = h;
+    }
     uint256 public initializedAt;
     address public fees;
 

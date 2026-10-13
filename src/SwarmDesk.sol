@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
+import {Robinhood} from "./lib/Robinhood.sol";
 
 import {OracleAttestation, OracleAttestationConsumer} from "./oracle/OracleAttestation.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -39,6 +40,12 @@ interface ISwarmFactory {
         external
         view
         returns (address);
+}
+
+interface IBoundHook {
+    function desk() external view returns (address);
+    function token() external view returns (address);
+    function gameConfigHash() external view returns (bytes32);
 }
 
 interface ISwarmRegistry is IGameRegistry {
@@ -114,33 +121,28 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
     event Executed(uint8 indexed stream, bytes32 indexed requestId, bytes32 letterHash);
     event ActionSkipped(uint8 indexed action, bytes reason);
 
-    /// @dev Twelve static ABI words fit the launcher's flat constructor encoder and the legacy (non via-IR)
-    /// code generator the IMD verifier builds with, which decodes at most twelve such arguments (v3.9).
+    /// @dev Seven static ABI words fit the launcher's flat constructor encoder and the legacy (non via-IR)
+    /// code generator the IMD verifier builds with, with no protocol-address arguments (v3.14).
     /// policyWord = chainId[0:32] | fromBlock[32:80] | toBlock[80:128] | maxPrice[128:224] | heartbeatBps[224:240];
     /// bits 240-255 must be zero. No launch coordinate is taken: IMD launch numbers cannot be reserved, so
     /// they are supplied and proven at bind time (v3.8). The heartbeat cap is fixed at 1 ether.
     /// gameConfigHash = keccak256(abi.encode(starterRoot, freeRoot, snapshotBlock, endowment)); the token
     /// is deliberately excluded because the Desk bootstrap precedes the token launch.
     constructor(
-        address intake_,
-        address delivery_,
-        address signer_,
-        address asset_,
         bytes32 action_,
         uint256 policyWord,
         bytes32 eventQuestion,
         bytes32 regulatorQuestion,
         bytes32 eventBody,
         bytes32 regulatorBody,
-        address factory_,
         bytes32 gameConfigHash_
-    ) OracleAttestationConsumer(signer_) {
+    ) OracleAttestationConsumer(Robinhood.ATTESTER) {
         if (policyWord >> 240 != 0) revert InvalidValue();
         OracleConfig memory o;
-        o.intake = intake_;
-        o.delivery = delivery_;
-        o.signer = signer_;
-        o.asset = asset_;
+        o.intake = Robinhood.INTAKE;
+        o.delivery = Robinhood.DELIVERY;
+        o.signer = Robinhood.ATTESTER;
+        o.asset = Robinhood.IMD;
         o.action = action_;
         o.questionChain = uint32(policyWord);
         o.fromBlock = uint48(policyWord >> 32);
@@ -149,7 +151,7 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         o.questions = [eventQuestion, regulatorQuestion];
         o.bodies = [eventBody, regulatorBody];
         BindingConfig memory b;
-        b.factory = factory_;
+        b.factory = Robinhood.PROJECT_FACTORY;
         b.heartbeatBps = uint16(policyWord >> 224);
         b.heartbeatCap = 1 ether;
         b.gameConfigHash = gameConfigHash_;
@@ -200,6 +202,11 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         if (r.params() != p) revert InvalidProof();
         if (_predictRegistry(r, p, registryLaunch, registryIndex, registryCode) != candidate) revert InvalidProof();
         if (candidate.code.length == 0) revert InvalidProof();
+        IBoundHook h = IBoundHook(r.market());
+        if (address(h).code.length == 0) revert InvalidProof();
+        if (h.desk() != address(this) || h.token() != r.token() || h.gameConfigHash() != binding.gameConfigHash) {
+            revert InvalidProof();
+        }
         binding.registryLaunch = registryLaunch;
         binding.registryIndex = registryIndex;
         binding.paramsLaunch = paramsLaunch;
@@ -220,9 +227,8 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         view
         returns (address)
     {
-        bytes memory args = abi.encode(
-            r.token(), p, r.market(), r.starterRoot(), r.freeRoot(), r.snapshotBlock(), r.endowment(), binding.factory
-        );
+        bytes memory args =
+            abi.encode(r.token(), p, r.market(), r.starterRoot(), r.freeRoot(), r.snapshotBlock(), r.endowment());
         return ISwarmFactory(binding.factory).predictContract(launch, index, bytes.concat(code, args));
     }
 
@@ -411,9 +417,9 @@ contract SwarmDesk is OracleAttestationConsumer, ReentrancyGuard {
         for (uint256 i; i < 8; ++i) {
             uint256 packed = uint256(v[i + 1]);
             uint256 key = packed >> 248;
-            if (key == 0) continue;
+            if (key == 0 || key > 45) continue;
             uint256 target = packed & type(uint248).max;
-            Params.Key k = Params.Key(_clamp(key, 1, 45) - 1);
+            Params.Key k = Params.Key(key - 1);
             uint256 old = params.get(k);
             (uint256 lo, uint256 hi) = params.bounds(k);
             target = _clamp(_clamp(target, lo, hi), old - old / 10, old + old / 10);

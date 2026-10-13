@@ -8,20 +8,11 @@ import {OracleAttestation} from "../src/oracle/OracleAttestation.sol";
 contract SwarmVectorHarness is SwarmDesk {
     constructor(OracleConfig memory o, BindingConfig memory b)
         SwarmDesk(
-            o.intake,
-            o.delivery,
-            o.signer,
-            o.asset,
-            o.action,
-            SwarmArgs.policy(o, b),
-            o.questions[0],
-            o.questions[1],
-            o.bodies[0],
-            o.bodies[1],
-            b.factory,
-            b.gameConfigHash
+            o.action, SwarmArgs.policy(o, b), o.questions[0], o.questions[1], o.bodies[0], o.bodies[1], b.gameConfigHash
         )
-    {}
+    {
+        _setOracleSigner(o.signer);
+    }
 
     function verifyVector(OracleAttestation.Attestation calldata a, bytes calldata sig) external view {
         _verifyAttestation(a, sig);

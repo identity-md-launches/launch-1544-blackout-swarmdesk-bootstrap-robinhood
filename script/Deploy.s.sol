@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
+import {Robinhood} from "../src/lib/Robinhood.sol";
 import {Script} from "forge-std/Script.sol";
 import {SwarmDesk} from "../src/SwarmDesk.sol";
 import {SwarmArgs} from "./SwarmArgs.sol";
@@ -56,7 +57,20 @@ contract LocalApplicationFactory {
 }
 
 /// @notice Offline rehearsal of a Desk bootstrap and two application launches. Explicit values only; no broadcasts or environment reads.
+interface IFixtureMarket {
+    function configureBinding(address desk, bytes32 gameConfigHash) external;
+}
+
+contract LocalLaunchRecords {
+    function isRecorded(uint64 n) external view returns (bool) {
+        return LocalApplicationFactory(Robinhood.PROJECT_FACTORY).isRecorded(n);
+    }
+}
+
 contract Deploy is Script {
+    uint64 private nextLaunch = 1;
+    uint64 private baseLaunch;
+
     struct Config {
         address token;
         bytes oracle;
@@ -98,17 +112,35 @@ contract Deploy is Script {
             c.endowmentBps != 0 && c.endowmentBps != 1000 && c.endowmentBps != 1500 && c.endowmentBps != 2000
                 && c.endowmentBps != 2500
         ) revert InvalidValue();
-        LocalApplicationFactory factory = new LocalApplicationFactory();
+        if (Robinhood.PROJECT_FACTORY.code.length == 0) {
+            vm.etch(Robinhood.PROJECT_FACTORY, type(LocalApplicationFactory).runtimeCode);
+            vm.etch(Robinhood.PROJECT_REGISTRY, type(LocalLaunchRecords).runtimeCode);
+        }
+        LocalApplicationFactory factory = LocalApplicationFactory(Robinhood.PROJECT_FACTORY);
+        baseLaunch = nextLaunch == 0 ? 1 : nextLaunch;
+        nextLaunch = baseLaunch + 1000;
         SwarmDesk desk = _desk(factory, c);
         d.params = Params(
             factory.deploy(
-                1,
+                baseLaunch,
                 0,
                 abi.encodePacked(type(Params).creationCode, abi.encode(address(desk), c.heartbeatBps, c.heartbeatCap))
             )
         );
         d.registry = _registry(factory, c, address(d.params));
-        desk.bind(address(d.registry), type(GameRegistry).creationCode, type(Params).creationCode, 1, 1, 1, 0);
+        IFixtureMarket(c.market)
+            .configureBinding(
+                address(desk), keccak256(abi.encode(c.starterRoot, c.freeRoot, c.snapshotBlock, _endowment(c)))
+            );
+        desk.bind(
+            address(d.registry),
+            type(GameRegistry).creationCode,
+            type(Params).creationCode,
+            baseLaunch,
+            1,
+            baseLaunch,
+            0
+        );
         address[14] memory modules = _modules(factory, address(d.registry));
         d.pool = RewardPool(modules[0]);
         d.rewards = FarmRewards(modules[1]);
@@ -143,7 +175,7 @@ contract Deploy is Script {
             c.heartbeatCap
         );
         bytes memory args = SwarmArgs.encode(abi.decode(c.oracle, (SwarmDesk.OracleConfig)), binding);
-        return SwarmDesk(factory.deploy(3, 0, bytes.concat(vm.getCode("SwarmDesk.sol:SwarmDesk"), args)));
+        return SwarmDesk(factory.deploy(baseLaunch + 2, 0, bytes.concat(vm.getCode("SwarmDesk.sol:SwarmDesk"), args)));
     }
 
     function _registry(LocalApplicationFactory factory, Config memory c, address params)
@@ -151,9 +183,9 @@ contract Deploy is Script {
         returns (GameRegistry)
     {
         bytes memory args = abi.encode(
-            c.token, params, c.market, c.starterRoot, c.freeRoot, c.snapshotBlock, _endowment(c), address(factory)
+            c.token, params, c.market, c.starterRoot, c.freeRoot, c.snapshotBlock, _endowment(c)
         );
-        return GameRegistry(factory.deploy(1, 1, abi.encodePacked(type(GameRegistry).creationCode, args)));
+        return GameRegistry(factory.deploy(baseLaunch, 1, abi.encodePacked(type(GameRegistry).creationCode, args)));
     }
 
     function _modules(LocalApplicationFactory factory, address registry) private returns (address[14] memory modules) {
@@ -175,7 +207,7 @@ contract Deploy is Script {
         ];
         for (uint256 i; i < 14; ++i) {
             bytes memory code = vm.getCode(string.concat(names[i], ".sol:", names[i]));
-            uint64 launchNumber = i < 6 ? 1 : 2;
+            uint64 launchNumber = i < 6 ? baseLaunch : baseLaunch + 1;
             uint256 index = i < 6 ? i + 2 : i - 6;
             modules[i] = factory.deploy(launchNumber, index, abi.encodePacked(code, abi.encode(registry)));
             assert(GameRegistry(registry).register(i, launchNumber, index, code) == modules[i]);

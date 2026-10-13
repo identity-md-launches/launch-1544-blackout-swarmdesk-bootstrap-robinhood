@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
+import {Robinhood} from "./lib/Robinhood.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -41,18 +42,16 @@ interface IEscrowParams {
 contract EndowmentEscrow is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    address public immutable factory;
-    address public immutable records;
+    address public constant factory = Robinhood.PROJECT_FACTORY;
+    address public constant records = Robinhood.PROJECT_REGISTRY;
     address public immutable desk;
     bool public forwarded;
     event Forwarded(address indexed registry, address indexed pool, address indexed token, uint256 amount);
 
-    constructor(address factory_, address records_, address desk_) {
-        if (factory_ == address(0) || records_ == address(0) || desk_ == address(0) || factory_ == desk_) {
+    constructor(address desk_) {
+        if (desk_ == address(0) || factory == desk_) {
             revert InvalidValue();
         }
-        factory = factory_;
-        records = records_;
         desk = desk_;
     }
 
@@ -91,7 +90,7 @@ contract EndowmentEscrow is ReentrancyGuard {
 
     function _proveRegistry(IEscrowRegistry r, uint64 launch, uint256 index, bytes calldata code) private view {
         bytes memory args = abi.encode(
-            r.token(), r.params(), r.market(), r.starterRoot(), r.freeRoot(), r.snapshotBlock(), r.endowment(), factory
+            r.token(), r.params(), r.market(), r.starterRoot(), r.freeRoot(), r.snapshotBlock(), r.endowment()
         );
         if (IEscrowFactory(factory).predictContract(launch, index, bytes.concat(code, args)) != address(r)) {
             revert InvalidProof();

@@ -8,6 +8,7 @@ import {Params} from "../src/Params.sol";
 import {LocalApplicationFactory} from "../script/Deploy.s.sol";
 import {SwarmDesk} from "../src/SwarmDesk.sol";
 import {SwarmArgs} from "../script/SwarmArgs.sol";
+import {MockMarket} from "./mocks/MockMarket.sol";
 import {MockToken} from "./mocks/MockToken.sol";
 import "../src/lib/Errors.sol";
 
@@ -53,12 +54,17 @@ contract TwinCaptureV312Test is BaseTest {
                 )
             )
         );
-        escrow = new EndowmentEscrow(address(f), address(f), freshDesk);
+        market.configureBinding(freshDesk, configHash);
+        escrow = new EndowmentEscrow(freshDesk);
         token.transfer(address(escrow), ENDOWMENT); // the token launch's remainderTo share
     }
 
     /// @dev Params at (launch, 0), Registry at (launch, 1), RewardPool at (launch, 2), pool registered as role 0.
-    function _launch(uint64 launch) private returns (Game memory g) {
+    function _launch(uint64 launch) private returns (Game memory) {
+        return _launchWith(launch, address(token), address(market));
+    }
+
+    function _launchWith(uint64 launch, address gameToken, address gameMarket) private returns (Game memory g) {
         g.params = Params(
             f.deploy(
                 launch,
@@ -67,14 +73,13 @@ contract TwinCaptureV312Test is BaseTest {
             )
         );
         bytes memory args = abi.encode(
-            address(token),
+            gameToken,
             address(g.params),
-            address(market),
+            gameMarket,
             d.registry.starterRoot(),
             d.registry.freeRoot(),
             d.registry.snapshotBlock(),
-            ENDOWMENT,
-            address(f)
+            ENDOWMENT
         );
         g.registry = GameRegistry(f.deploy(launch, 1, bytes.concat(registryCode, args)));
         g.pool = RewardPool(f.deploy(launch, 2, bytes.concat(poolCode, abi.encode(address(g.registry)))));
@@ -94,6 +99,37 @@ contract TwinCaptureV312Test is BaseTest {
                 uint8(0)
             )
         );
+    }
+
+    function _reject(Game memory g, uint64 launch) private {
+        (bool ok, bytes memory reason) = _bind(g, launch);
+        assertFalse(ok);
+        assertEq(bytes4(reason), InvalidProof.selector);
+        assertEq(address(SwarmDesk(freshDesk).registry()), address(0));
+        assertEq(token.balanceOf(address(escrow)), ENDOWMENT);
+    }
+
+    function testTwinWithForeignMarketCannotBind() public {
+        MockMarket foreign = new MockMarket(address(token));
+        foreign.configureBinding(address(desk), market.gameConfigHash());
+        _reject(_launchWith(41, address(token), address(foreign)), 41);
+        (bool ok,) = _bind(_launch(42), 42);
+        assertTrue(ok, "honest binding remains available");
+    }
+
+    function testTwinWithForeignTokenCannotBind() public {
+        _reject(_launchWith(41, address(new MockToken()), address(market)), 41);
+        (bool ok,) = _bind(_launch(42), 42);
+        assertTrue(ok);
+    }
+
+    function testEOAMarketCannotBind() public {
+        _reject(_launchWith(41, address(token), attacker), 41);
+    }
+
+    function testHookWithForeignConfigurationCannotBind() public {
+        market.configureBinding(freshDesk, keccak256("foreign config"));
+        _reject(_launch(41), 41);
     }
 
     /// Success path without a twin: the honest game binds and the escrow pays its pinned RewardPool.

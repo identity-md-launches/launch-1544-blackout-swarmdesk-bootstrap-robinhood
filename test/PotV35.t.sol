@@ -33,7 +33,7 @@ contract PotV35Test is BaseTest {
         d.season.finalize(0);
     }
 
-    function testPotSplitDistinctLotteryDistrictAndRollbackOnFullInventory() public {
+    function testPotSplitAndLotteryCommitSurvivesFullInventory() public {
         _fundPot(1000 ether);
         _participant(alice);
         _participant(bob);
@@ -50,21 +50,19 @@ contract PotV35Test is BaseTest {
         for (uint256 i; i < 15; ++i) {
             mintItem(alice, uint8(i % 12), 0);
         }
-        uint256 savedPot = d.season.potRemaining(0);
-        vm.expectRevert(InvalidValue.selector);
-        vm.prank(alice);
-        d.season.claimLottery(0);
-        assertFalse(d.season.lotteryClaimed(0, alice));
-        assertEq(d.season.potRemaining(0), savedPot);
-        entropy();
-        d.rewards.advanceEpoch();
-        vm.prank(alice);
-        d.farm.expand(true);
         uint256 before_ = token.balanceOf(alice);
         vm.prank(alice);
         uint256 id = d.season.claimLottery(0);
+        assertTrue(d.season.lotteryClaimed(0, alice));
         assertEq(token.balanceOf(alice) - before_, 100 ether);
-        assertTrue(d.items.data(id).starter);
+        entropy();
+        vm.expectRevert(InsufficientBalance.selector);
+        d.packs.resolve(id, 1);
+        d.rewards.advanceEpoch();
+        vm.prank(alice);
+        d.farm.expand(true);
+        d.packs.resolve(id, 1);
+        assertTrue(d.items.data(16).starter);
         vm.prank(bob);
         d.season.claimLottery(0);
         (, uint8 district,,,) = d.season.result(0);

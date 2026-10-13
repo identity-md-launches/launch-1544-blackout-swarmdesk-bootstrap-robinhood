@@ -54,13 +54,12 @@ contract RegistryTest is BaseTest {
             keccak256("real test root"),
             freePackRoot(),
             123,
-            100_000_000 ether,
-            address(f)
+            100_000_000 ether
         );
     }
 
     function testAuthenticatedEnrollmentRejectsUncreatedWrongCodeAndWrongRegistry() public {
-        LocalApplicationFactory f = new LocalApplicationFactory();
+        LocalApplicationFactory f = LocalApplicationFactory(address(d.registry.factory()));
         GameRegistry r = _fresh(f);
         bytes memory code = vm.getCode("RewardPool.sol:RewardPool");
         vm.expectRevert(NotConfigured.selector);
@@ -86,7 +85,7 @@ contract RegistryTest is BaseTest {
     }
 
     function testCounterfeitRuntimeAtAnotherFactoryCannotEnroll() public {
-        LocalApplicationFactory canonical = new LocalApplicationFactory();
+        LocalApplicationFactory canonical = LocalApplicationFactory(address(d.registry.factory()));
         LocalApplicationFactory rogue = new LocalApplicationFactory();
         GameRegistry r = _fresh(canonical);
         bytes memory code = vm.getCode("RewardPool.sol:RewardPool");
@@ -103,7 +102,7 @@ contract RegistryTest is BaseTest {
     }
 
     function testCounterfeitRuntimeWithPoisonedCreditCannotEnroll() public {
-        LocalApplicationFactory canonical = new LocalApplicationFactory();
+        LocalApplicationFactory canonical = LocalApplicationFactory(address(d.registry.factory()));
         GameRegistry r = _fresh(canonical);
         bytes memory code = vm.getCode("FeeRouter.sol:FeeRouter");
         address genuine = canonical.deploy(5, 0, abi.encodePacked(code, abi.encode(address(r))));

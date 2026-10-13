@@ -1,0 +1,190 @@
+{
+  "version": "3.14",
+  "chainId": 4663,
+  "gameConfigHash": "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3",
+  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records.",
+  "launches": [
+    {
+      "id": "L1",
+      "onchain": "evm_contracts",
+      "contracts": [
+        {
+          "name": "SwarmDesk",
+          "constructorArgs": [
+            "0x6f7261636c652e72657175657374406f7261636c652d31000000000000000000",
+            "5391989333430298100116863486635657822062725418115979424500284366258177",
+            "0x2fc5a57f2c5f7bc083ea8ac5016234f1a0b1c68a514e5d921956cc57948534ef",
+            "0xc13efed8438aab53ea052a4507def2dc4ce9856765520dfa28c66daa59cfc11d",
+            "0x00e69e4445c7ca7256338293f9f9cea439fd2beb1959d1d43ebec7b14493e2f6",
+            "0xc0ae7511b06744cf7ccadc6b60ff9ff96cb7234cf32988850df33324861cc8df",
+            "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"
+          ],
+          "creationHash": "0x2573ebbe036cbb372112a707611204bbc7f679484b83d99f387cb2dad0e1135e"
+        },
+        {
+          "name": "EndowmentEscrow",
+          "constructorArgs": [
+            "$contract:SwarmDesk"
+          ],
+          "creationHash": "0x8120758fa38683db9af5b5dbd28c6bd5682f58f160e36b1fc951815082101087"
+        }
+      ]
+    },
+    {
+      "id": "L2",
+      "onchain": "univ4_hook",
+      "pairWith": "eth",
+      "economics": {
+        "poolBps": 7000,
+        "remainderTo": "<L1_ENDOWMENT_ESCROW>"
+      },
+      "contracts": [
+        {
+          "name": "V4Market",
+          "constructorArgs": [
+            "$poolManager",
+            "$token",
+            "12500",
+            "60",
+            "$factory",
+            "<L1_SWARM_DESK>",
+            "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"
+          ],
+          "creationHash": "0xb3a295abe415ce500a185349e2b831e67d06993d647b3831babacdfc96fb00d3"
+        }
+      ]
+    },
+    {
+      "id": "L3",
+      "onchain": "evm_contracts",
+      "contracts": [
+        {
+          "name": "Params",
+          "constructorArgs": [
+            "<L1_SWARM_DESK>",
+            "200",
+            "1000000000000000000"
+          ],
+          "creationHash": "0x26c9f36af040b02eba9644f52daeed84fae4e42eab9bdb23277d0bb28c6dc6c0"
+        },
+        {
+          "name": "GameRegistry",
+          "constructorArgs": [
+            "<L2_TOKEN>",
+            "$contract:Params",
+            "<L2_V4MARKET>",
+            "<STARTER_ROOT>",
+            "<FREE_ROOT>",
+            "<SNAPSHOT_BLOCK>",
+            "200000000000000000000000000"
+          ],
+          "creationHash": "0xb763989d9f8be8f545dd607d7bc7810001086e9e65bdf6fe9521e5ec9ddc5c88"
+        },
+        {
+          "name": "RewardPool",
+          "constructorArgs": [
+            "$contract:GameRegistry"
+          ],
+          "creationHash": "0xecf3ae5ebb791318703b5e79960cfd243b7d89bdffa0e0501bee5146623764de"
+        },
+        {
+          "name": "FarmRewards",
+          "constructorArgs": [
+            "$contract:GameRegistry"
+          ],
+          "creationHash": "0xf8f9f93e6bd8df85caaf5c508a71fb285a2f6229a5ef54023ac49ba66a14a001"
+        },
+        {
+          "name": "FarmCore",
+          "constructorArgs": [
+            "$contract:GameRegistry"
+          ],
+          "creationHash": "0xd6b7d7555a5865832a6d352b2a0bfa96ea10857b076a4cc156d5ad78cd1044fa"
+        },
+        {
+          "name": "FarmItems",
+          "constructorArgs": [
+            "$contract:GameRegistry"
+          ],
+          "creationHash": "0x98f7224201d9e7e3d16bd8996c29a522cac5bd1b375181de8cfdc2c6b9639e76"
+        },
+        {
+          "name": "PackSale",
+          "constructorArgs": [
+            "$contract:GameRegistry"
+          ],
+          "creationHash": "0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737a"
+        },
+        {
+          "name": "StarterClaim",
+          "constructorArgs": [
+            "$contract:GameRegistry"
+          ],
+          "creationHash": "0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90"
+        }
+      ]
+    },
+    {
+      "id": "L4",
+      "onchain": "evm_contracts",
+      "contracts": [
+        {
+          "name": "FeeRouter",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0x3b53c8d89f2836c0744007bac7e168e6c66dd19eaf4a74b2eadd5161ad12e6af"
+        },
+        {
+          "name": "GridOperator",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0xf21418187e35f2785dfd16075ad4b1bf855552ac4b413592f29d7222777974e9"
+        },
+        {
+          "name": "Season",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0xa79fdfbecdb2450bc94c1cedac7618b1f4244fe63c3f1bc6fea784f82cd42c83"
+        },
+        {
+          "name": "FarmEngine",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0x48a9f8dd8c707a2a8c6b4a1838640be765a3e3c9d2306680bda5ce679b6dbe7c"
+        },
+        {
+          "name": "Economy",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0x071421985d28e92da4caf5c8f17148d0cc9a8be8af66e7852d909d0a867b7e5d"
+        },
+        {
+          "name": "Enhancement",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0x19ff379fb18f8649bc3889c3f8981bcf40d7c4045fe066dde9014b55b9751689"
+        },
+        {
+          "name": "Civic",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0xb3e89ec00b8ad51904cdac336644a6025ceea25c15fa931cac2ad13d89dc0bb2"
+        },
+        {
+          "name": "Billboards",
+          "constructorArgs": [
+            "<L3_GAME_REGISTRY>"
+          ],
+          "creationHash": "0x3cb8b542f7baa025b6db7f2a4864288a594d05e75b9b4e9ec66416c1fe52aa60"
+        }
+      ]
+    }
+  ]
+}

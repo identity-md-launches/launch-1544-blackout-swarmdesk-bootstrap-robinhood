@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Offline packing for the launcher's twelve-word SwarmDesk constructor (v3.9). No RPC or signing.
+// Offline packing for the launcher's seven-word SwarmDesk constructor (v3.14). No RPC or signing.
 // policyWord = chainId[0:32] | fromBlock[32:80] | toBlock[80:128] | maxPrice[128:224] | heartbeatBps[224:240].
+import {protocolAddresses} from './check_deploy_gate.mjs';
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
@@ -32,10 +33,13 @@ export function policyWord(o,b) {
 export function swarmConstructorArgs(o,b) {
   if(o.intake.toLowerCase()===o.delivery.toLowerCase())throw Error('Duplicate callback endpoints');
   if(o.questions[0].toLowerCase()===o.questions[1].toLowerCase())throw Error('Duplicate question commitments');
-  return [address(o.intake,'intake'),address(o.delivery,'delivery'),address(o.signer,'signer'),address(o.asset,'asset'),
-    hash(o.action,'action'),policyWord(o,b).toString(),
+  for (const [key,name] of [['intake','Intake'],['delivery','IntakeDelivery'],['signer','attester'],['asset','IMD']]) {
+    if(address(o[key],key).toLowerCase()!==protocolAddresses[name]) throw Error(`Fixed Robinhood endpoint: ${key}`);
+  }
+  if(address(b.factory,'factory').toLowerCase()!==protocolAddresses.ProjectFactory) throw Error('Fixed Robinhood ProjectFactory');
+  return [hash(o.action,'action'),policyWord(o,b).toString(),
     hash(o.questions[0],'eventQuestion'),hash(o.questions[1],'regulatorQuestion'),hash(o.bodies[0],'eventBody'),hash(o.bodies[1],'regulatorBody'),
-    address(b.factory,'factory'),hash(b.gameConfigHash,'gameConfigHash')];
+    hash(b.gameConfigHash,'gameConfigHash')];
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
   if(process.argv.length!==4)throw Error('Usage: node tools/swarm_constructor_args.mjs oracle-config.json approved-binding.json');

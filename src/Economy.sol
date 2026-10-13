@@ -172,8 +172,10 @@ contract Economy is GameModule, ReentrancyGuard {
     function _insert(uint256 d, address p) private {
         address cursor = head[d];
         address prev;
-        // User pays for insertion only. Epoch snapshots inspect at most the top ten wallets.
+        // Bound insertion work; callers needing deeper insertion can wait for earlier locks to exit.
+        uint256 steps;
         while (cursor != address(0) && locks[cursor].amount >= locks[p].amount) {
+            if (steps++ == 32) revert InvalidValue();
             prev = cursor;
             cursor = next[cursor];
         }

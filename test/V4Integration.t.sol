@@ -72,9 +72,12 @@ contract V4IntegrationTest is BaseTest {
         require(msg.sender == address(manager));
         (uint8 action, uint256 amount) = abi.decode(data, (uint8, uint256));
         int256 delta;
-        if (action == 0) {
-            (delta,) =
-                manager.modifyLiquidity(hook.key(), LiquidityParams(-887220, 887220, int256(amount), bytes32(0)), "");
+        if (action == 0 || action == 3) {
+            (delta,) = manager.modifyLiquidity(
+                hook.key(),
+                LiquidityParams(-887220, 887220, action == 0 ? int256(amount) : -int256(amount), bytes32(0)),
+                ""
+            );
         } else {
             delta = manager.swap(
                 hook.key(),
@@ -98,6 +101,42 @@ contract V4IntegrationTest is BaseTest {
             manager.take(address(token), address(this), uint256(uint128(b)));
         }
         return abi.encode(delta);
+    }
+
+    function testTenEthPoolRewardBuyAtSpotTwapIncludesLpFee() public {
+        manager.unlock(abi.encode(uint8(3), uint256(990 ether)));
+        assertEq(hook.spot(), hook.twap());
+        router.depositBaseFee{value: 0.1 ether}();
+        uint256 amount = 0.05 ether;
+        uint256 quote = hook.quote(amount);
+        assertEq(quote, amount * 9900 / 10000 * 987500 / 1_000_000);
+        uint256 beforePool = token.balanceOf(address(d.pool));
+        uint256 received = router.executeBuys(amount, quote * 9850 / 10000);
+        assertGe(received, quote * 9850 / 10000);
+        assertEq(token.balanceOf(address(d.pool)) - beforePool, received);
+        assertEq(router.rewardETH(), 0.05 ether);
+    }
+
+    function testTenEthPoolSystemSellAtSpotTwapIncludesLpFee() public {
+        manager.unlock(abi.encode(uint8(3), uint256(990 ether)));
+        assertEq(hook.spot(), hook.twap());
+        token.transfer(address(router), 10 ether);
+        vm.prank(address(d.packs));
+        router.routeTokens(10 ether);
+        (uint256 batch, uint256 minimum) = router.sellBatchQuote();
+        assertEq(batch, 0.01 ether);
+        uint256 quote = hook.quoteSell(batch);
+        assertEq(quote, batch * 987500 / 1_000_000 * 9900 / 10000);
+        assertEq(minimum, quote * 9850 / 10000);
+        uint256 beforeTokens = token.balanceOf(address(router));
+        vm.expectRevert();
+        router.executeSells(batch, quote); // zero price-impact tolerance is not fillable
+        assertEq(token.balanceOf(address(router)), beforeTokens);
+        assertEq(router.lastSell(), 0);
+        uint256 received = router.executeSells(batch, minimum);
+        assertGe(received, minimum);
+        assertEq(beforeTokens - token.balanceOf(address(router)), batch);
+        assertEq(router.credit(team) + router.heartbeatBalance(), received);
     }
 
     function testRealV4BuyAndSingleSwapSellTaxConserveSettlement() public {

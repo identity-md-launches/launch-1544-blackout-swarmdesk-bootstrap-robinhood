@@ -26,18 +26,14 @@ contract EndowmentEscrowV38Test is BaseTest {
         super.setUp();
         vm.clearMockedCalls();
         LocalApplicationFactory f = LocalApplicationFactory(address(d.registry.factory()));
-        escrow = new EndowmentEscrow(address(f), address(f), address(desk));
+        escrow = new EndowmentEscrow(address(desk));
         registryCode = type(GameRegistry).creationCode;
         poolCode = vm.getCode("RewardPool.sol:RewardPool");
     }
 
     function testConstructorRejectsMissingInputs() public {
         vm.expectRevert(InvalidValue.selector);
-        new EndowmentEscrow(address(0), address(this), address(desk));
-        vm.expectRevert(InvalidValue.selector);
-        new EndowmentEscrow(address(this), address(0), address(desk));
-        vm.expectRevert(InvalidValue.selector);
-        new EndowmentEscrow(address(this), address(this), address(0));
+        new EndowmentEscrow(address(0));
     }
 
     function testForwardSendsWholeBalanceOnceToAuthenticatedPoolAndFundsEndowment() public {
@@ -62,7 +58,7 @@ contract EndowmentEscrowV38Test is BaseTest {
         // A registry with a 20% endowment, bound to a fresh Desk, at fresh coordinates of the fixture factory.
         uint256 endowment = 200_000_000 ether;
         (address fresh, GameRegistry r, RewardPool pool) = _freshGame(endowment, address(token));
-        EndowmentEscrow e = new EndowmentEscrow(address(r.factory()), address(r.factory()), fresh);
+        EndowmentEscrow e = new EndowmentEscrow(fresh);
         token.transfer(address(e), endowment);
         // The fixture registry is not the one this Desk bound to.
         vm.expectRevert(InvalidProof.selector);
@@ -98,7 +94,8 @@ contract EndowmentEscrowV38Test is BaseTest {
         );
         pool = RewardPool(f.deploy(22, 0, bytes.concat(poolCode, abi.encode(address(r)))));
         r.register(0, 22, 0, poolCode);
-        (bool ok,) = fresh.call(
+        market.configureBinding(fresh, configHash);
+        (bool ok, bytes memory reason) = fresh.call(
             abi.encodeWithSignature(
                 "bind(address,bytes,bytes,uint64,uint8,uint64,uint8)",
                 address(r),
@@ -110,7 +107,12 @@ contract EndowmentEscrowV38Test is BaseTest {
                 uint8(0)
             )
         );
-        assertTrue(ok, "bind");
+        if (gameToken == address(token)) {
+            assertTrue(ok, "bind");
+        } else {
+            assertFalse(ok);
+            assertEq(bytes4(reason), InvalidProof.selector);
+        }
     }
 
     function _registryArgs(address gameToken, address params, uint256 endowment, address factory)
@@ -125,8 +127,7 @@ contract EndowmentEscrowV38Test is BaseTest {
             d.registry.starterRoot(),
             d.registry.freeRoot(),
             d.registry.snapshotBlock(),
-            endowment,
-            factory
+            endowment
         );
     }
 
@@ -138,10 +139,10 @@ contract EndowmentEscrowV38Test is BaseTest {
         uint256 endowment = 200_000_000 ether;
         MockToken other = new MockToken();
         (address fresh, GameRegistry twin, RewardPool pool) = _freshGame(endowment, address(other));
-        assertEq(address(SwarmDesk(fresh).registry()), address(twin));
-        EndowmentEscrow e = new EndowmentEscrow(address(twin.factory()), address(twin.factory()), fresh);
+        assertEq(address(SwarmDesk(fresh).registry()), address(0));
+        EndowmentEscrow e = new EndowmentEscrow(fresh);
         token.transfer(address(e), endowment);
-        vm.expectRevert(InsufficientBalance.selector);
+        vm.expectRevert(InvalidProof.selector);
         e.forward(address(twin), 21, 1, registryCode, 22, 0, poolCode);
         assertEq(token.balanceOf(address(e)), endowment);
         assertEq(token.balanceOf(address(pool)), 0);
@@ -174,8 +175,7 @@ contract EndowmentEscrowV38Test is BaseTest {
             d.registry.starterRoot(),
             d.registry.freeRoot(),
             d.registry.snapshotBlock(),
-            d.registry.endowment(),
-            address(d.registry.factory())
+            d.registry.endowment()
         );
         vm.expectRevert(InvalidProof.selector);
         escrow.forward(address(spoof), 1, 1, registryCode, 1, 2, poolCode);

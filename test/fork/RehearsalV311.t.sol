@@ -2,6 +2,8 @@
 pragma solidity 0.8.26;
 import {Test, console2} from "forge-std/Test.sol";
 import {SwarmDesk} from "../../src/SwarmDesk.sol";
+import {Robinhood} from "../../src/lib/Robinhood.sol";
+import {MockOracleSigner} from "../mocks/MockOracleSigner.sol";
 import {SwarmArgs} from "../../script/SwarmArgs.sol";
 import {SwarmCode} from "../../src/lib/SwarmCode.sol";
 import {ModuleCode} from "../../src/lib/ModuleCode.sol";
@@ -89,7 +91,7 @@ interface ILaunchFactory {
     function deployer() external view returns (address);
 }
 
-/// @title BLACKOUT v3.11 fork rehearsal of launch-v39.md steps M1–M13 on a Robinhood Chain (4663) fork.
+/// @title BLACKOUT v3.14 fork rehearsal of launch-v39.md steps M1–M13 on a Robinhood Chain (4663) fork.
 /// @notice Skips unless the test runs against a 4663 fork (`tools/rehearse_v311.sh` starts an anvil fork and
 /// points forge at it). Nothing is broadcast: every call is executed in the local fork only. The platform
 /// deployer is impersonated where the platform would deploy or initialize. Test roots, a test attester key and
@@ -109,10 +111,9 @@ contract RehearsalV311Test is Test {
     uint256 internal constant TEST_ATTESTER_KEY = 0xB1AC0007;
     /// @dev Throw-away launch numbers, asserted unrecorded on the fork before use.
     uint64 internal constant N_DESK = 777001;
-    uint64 internal constant N_ESCROW = 777002;
-    uint64 internal constant N_TOKEN = 777003;
-    uint64 internal constant N_A = 777004;
-    uint64 internal constant N_B = 777005;
+    uint64 internal constant N_TOKEN = 777002;
+    uint64 internal constant N_A = 777003;
+    uint64 internal constant N_B = 777004;
 
     struct State {
         address deployer;
@@ -130,7 +131,6 @@ contract RehearsalV311Test is Test {
         address[8] jobB;
         uint256 l2Block;
         uint256 gasDesk;
-        uint256 gasEscrow;
         uint256 gasToken;
         uint256 gasJobA;
         uint256 gasJobB;
@@ -150,17 +150,17 @@ contract RehearsalV311Test is Test {
         s.freeRoot = keccak256("v3.11 rehearsal free-pack root (throw-away)");
         s.snapshotBlock = 23_400_000;
         s.gameConfigHash = keccak256(abi.encode(s.starterRoot, s.freeRoot, s.snapshotBlock, ENDOWMENT));
+        vm.etch(Robinhood.ATTESTER, address(new MockOracleSigner(vm.addr(TEST_ATTESTER_KEY))).code);
         _mockClock(1_000_000);
         vm.deal(s.deployer, 100 ether);
         vm.deal(address(this), 1000 ether);
-        console2.log("== BLACKOUT v3.11 fork rehearsal, chain", block.chainid, "fork block", block.number);
+        console2.log("== BLACKOUT v3.14 fork rehearsal, chain", block.chainid, "fork block", block.number);
         console2.log("deployer (impersonated)", s.deployer);
         console2.log("gameConfigHash (test roots)", vm.toString(s.gameConfigHash));
         for (uint64 n = N_DESK; n <= N_B; ++n) {
             assertFalse(PFR.isRecorded(n), "throw-away launch number already recorded");
         }
         _m1Desk();
-        _m2Escrow();
         _m3Token();
         _m4JobA();
         _m5Bind();
@@ -208,7 +208,7 @@ contract RehearsalV311Test is Test {
         for (uint256 i; i < deployed.length; ++i) {
             assertGt(deployed[i].code.length, 0, "deployed at predicted address");
             console2.log(string.concat("  [", vm.toString(i), "] ", names[i]), deployed[i]);
-            console2.log("      creationCodeHash", vm.toString(keccak256(initCodes[i])));
+            console2.log("      initCodeHash (creation code + constructor words)", vm.toString(keccak256(initCodes[i])));
         }
         console2.log("  launchContracts gas", gasUsed, "wei at basefee", gasUsed * block.basefee);
     }
@@ -216,7 +216,7 @@ contract RehearsalV311Test is Test {
     function _oracle() internal view returns (SwarmDesk.OracleConfig memory o) {
         o.intake = INTAKE;
         o.delivery = DELIVERY;
-        o.signer = vm.addr(TEST_ATTESTER_KEY);
+        o.signer = Robinhood.ATTESTER;
         o.asset = IMD;
         o.action = bytes32("oracle.request@oracle-1");
         o.maxPrice = 0.5 ether;
@@ -237,34 +237,26 @@ contract RehearsalV311Test is Test {
     // ───────────────────────────── M1–M10 ─────────────────────────────
 
     function _m1Desk() internal {
-        console2.log("M1 SwarmDesk bootstrap via ProjectFactory, launch", N_DESK);
+        console2.log("L1 SwarmDesk + EndowmentEscrow via ProjectFactory, launch", N_DESK);
         SwarmDesk.BindingConfig memory b =
             SwarmDesk.BindingConfig(address(PF), 0, 0, 0, 0, s.gameConfigHash, 200, 1 ether);
         bytes memory args = SwarmArgs.encode(_oracle(), b);
-        assertEq(args.length, 12 * 32, "twelve static constructor words");
-        bytes[] memory codes = new bytes[](1);
+        assertEq(args.length, 7 * 32, "seven static constructor words");
+        bytes[] memory codes = new bytes[](2);
         codes[0] = bytes.concat(type(SwarmDesk).creationCode, args);
-        string[] memory names = new string[](1);
+        address predictedDesk = PF.predictContract(N_DESK, 0, codes[0]);
+        codes[1] = bytes.concat(type(EndowmentEscrow).creationCode, abi.encode(predictedDesk));
+        string[] memory names = new string[](2);
         names[0] = "SwarmDesk";
+        names[1] = "EndowmentEscrow";
         (address[] memory d, uint256 g) = _launchContracts(N_DESK, codes, names);
         s.gasDesk = g;
         s.desk = SwarmDesk(d[0]);
+        s.escrow = EndowmentEscrow(d[1]);
+        assertEq(address(s.desk), predictedDesk, "$contract:SwarmDesk resolves inside L1");
         assertEq(address(s.desk.registry()), address(0), "unbound");
         assertEq(s.desk.bindingConfig().gameConfigHash, s.gameConfigHash);
-        assertEq(s.desk.oracleConfig().signer, vm.addr(TEST_ATTESTER_KEY), "test attester on the fork only");
-        console2.log("  check Desk.registry() == 0: ok; attester (fork only)", vm.addr(TEST_ATTESTER_KEY));
-    }
-
-    function _m2Escrow() internal {
-        console2.log("M2 EndowmentEscrow via ProjectFactory, launch", N_ESCROW);
-        bytes[] memory codes = new bytes[](1);
-        codes[0] =
-            bytes.concat(type(EndowmentEscrow).creationCode, abi.encode(address(PF), address(PFR), address(s.desk)));
-        string[] memory names = new string[](1);
-        names[0] = "EndowmentEscrow";
-        (address[] memory d, uint256 g) = _launchContracts(N_ESCROW, codes, names);
-        s.gasEscrow = g;
-        s.escrow = EndowmentEscrow(d[0]);
+        assertEq(s.desk.oracleConfig().signer, Robinhood.ATTESTER, "fixed protocol signer");
         assertEq(s.escrow.factory(), address(PF));
         assertEq(s.escrow.records(), address(PFR));
         assertEq(s.escrow.desk(), address(s.desk));
@@ -274,16 +266,7 @@ contract RehearsalV311Test is Test {
     function _hookInitCode(address token) internal view returns (bytes memory) {
         return bytes.concat(
             type(V4Market).creationCode,
-            abi.encode(
-                POOL_MANAGER,
-                token,
-                uint24(12500),
-                int24(60),
-                address(LF),
-                address(PF),
-                address(s.desk),
-                s.gameConfigHash
-            )
+            abi.encode(POOL_MANAGER, token, uint24(12500), int24(60), address(LF), address(s.desk), s.gameConfigHash)
         );
     }
 
@@ -297,7 +280,7 @@ contract RehearsalV311Test is Test {
     }
 
     function _m3Token() internal {
-        console2.log("M3 token launch via LaunchFactory (univ4_hook), launch", N_TOKEN);
+        console2.log("L2 token launch via LaunchFactory (univ4_hook), launch", N_TOKEN);
         bytes memory tokenCode = _platformTokenInitCode();
         s.token = LF.predictToken(N_TOKEN, tokenCode);
         bytes memory hookCode = _hookInitCode(s.token);
@@ -354,7 +337,7 @@ contract RehearsalV311Test is Test {
     }
 
     function _m4JobA() internal {
-        console2.log("M4 job A via ProjectFactory, launch", N_A);
+        console2.log("L3 job A via ProjectFactory, launch", N_A);
         bytes[] memory codes = new bytes[](8);
         string[] memory names = new string[](8);
         codes[0] = bytes.concat(type(Params).creationCode, abi.encode(address(s.desk), uint256(200), uint256(1 ether)));
@@ -362,9 +345,7 @@ contract RehearsalV311Test is Test {
         address params = PF.predictContract(N_A, 0, codes[0]);
         codes[1] = bytes.concat(
             type(GameRegistry).creationCode,
-            abi.encode(
-                s.token, params, address(s.hook), s.starterRoot, s.freeRoot, s.snapshotBlock, ENDOWMENT, address(PF)
-            )
+            abi.encode(s.token, params, address(s.hook), s.starterRoot, s.freeRoot, s.snapshotBlock, ENDOWMENT)
         );
         names[1] = "GameRegistry";
         address registry = PF.predictContract(N_A, 1, codes[1]);
@@ -443,7 +424,7 @@ contract RehearsalV311Test is Test {
     }
 
     function _m7JobB() internal {
-        console2.log("M7 job B via ProjectFactory, launch", N_B);
+        console2.log("L4 job B via ProjectFactory, launch", N_B);
         string[8] memory modules =
             ["FeeRouter", "GridOperator", "Season", "FarmEngine", "Economy", "Enhancement", "Civic", "Billboards"];
         bytes[] memory codes = new bytes[](8);
@@ -717,11 +698,11 @@ contract RehearsalV311Test is Test {
         if (!forked) return vm.skip(true);
         uint256 ceiling = 0.01 ether;
         uint256 basefee = block.basefee;
-        console2.log("gas: Desk", s.gasDesk, "Escrow", s.gasEscrow);
+        console2.log("gas: L1 Desk + Escrow", s.gasDesk);
         console2.log("gas: token+hook", s.gasToken, "jobA", s.gasJobA);
         console2.log("gas: jobB", s.gasJobB, "basefee wei", basefee);
-        uint256[5] memory g = [s.gasDesk, s.gasEscrow, s.gasToken, s.gasJobA, s.gasJobB];
-        for (uint256 i; i < 5; ++i) {
+        uint256[4] memory g = [s.gasDesk, s.gasToken, s.gasJobA, s.gasJobB];
+        for (uint256 i; i < g.length; ++i) {
             uint256 cost = (g[i] + 21_000) * basefee;
             console2.log("  launch", i, "cost wei at fork basefee", cost);
             assertLt(cost, ceiling, "under the 0.01 ETH per-launch ceiling at the fork basefee");

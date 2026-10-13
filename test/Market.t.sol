@@ -37,13 +37,13 @@ contract MarketTest is BaseTest {
         vm.expectRevert(NotConfigured.selector);
         hook.quote(1 ether);
         vm.warp(launch + 31 minutes);
-        assertEq(hook.quote(1 ether), 0.99 ether);
+        assertEq(hook.quote(1 ether), 0.99 ether * 987500 / 1000000);
         manager.setSqrt(uint160(2 << 96));
         sell(5 ether);
-        assertEq(hook.quote(1 ether), 0.99 ether);
+        assertEq(hook.quote(1 ether), 0.99 ether * 987500 / 1000000);
         assertEq(hook.lastPrice(), 4 ether);
         vm.warp(vm.getBlockTimestamp() + 31 minutes);
-        assertEq(hook.quote(1 ether), 3.96 ether);
+        assertEq(hook.quote(1 ether), 3.96 ether * 987500 / 1000000);
     }
 
     function testSingleDumpIncludesItselfAndFeeDecaysWithoutGriefReset() public {
@@ -74,7 +74,7 @@ contract MarketTest is BaseTest {
         sell(1 ether);
         vm.warp(start + 30 minutes);
         // Fifteen minutes at 0.25 ETH/token and fifteen at 1 ETH/token average 0.625; 1% hook share.
-        assertEq(hook.quote(1 ether), 1.584 ether);
+        assertEq(hook.quote(1 ether), 1.584 ether * 987500 / 1000000);
     }
 
     function testOnlyManagerCorrectPoolExactInputAndHookAddress() public {
@@ -88,16 +88,7 @@ contract MarketTest is BaseTest {
         vm.expectRevert(Unauthorized.selector);
         hook.unlockCallback("");
         vm.expectRevert(InvalidAddress.selector);
-        new V4Market(
-            address(manager),
-            address(token),
-            12500,
-            60,
-            address(this),
-            address(bindingFactory),
-            address(desk),
-            bindingConfigHash()
-        );
+        new V4Market(address(manager), address(token), 12500, 60, address(this), address(desk), bindingConfigHash());
     }
 
     /// @dev v3.9: after the launch window a buy pays exactly 1% to the hook, all of it to reward buys.

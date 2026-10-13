@@ -288,3 +288,57 @@ not the v3.12 one.
 The requester pays and approves each launch job and the schedules, and supplies the inputs above. Anyone may send
 the permissionless wiring calls; the keeper wallet only pays gas and holds no game power. SwarmDesk acts only on
 attested oracle answers within hard-coded bounds. Nothing is upgradeable or owned.
+
+## v3.14 — launch-ready source, four launches, deploy-gate fix
+
+This source change is based on `24bfb1d700159042da4b08262927727d37170540`. Nothing was deployed or sent on chain. The protected build configuration and dependencies are unchanged. The supplied pre-launch audit findings and launch-1557 refusal are implemented below; the external `Identity-md/research/files/AUDIT.md` URL returned HTTP 404, so no claim is made to have read additional findings from that unavailable file.
+
+**Audit fixes.** V4Market's buy and sell quotes include the 12,500 ppm LP fee in the requested order. The 10 ETH full-range pool regressions use an actual v4 PoolManager: at spot = TWAP, a 0.05 ETH reward buy with `quote * 9850 / 10000` succeeds and reduces rewardETH; a depth-capped system sell succeeds at the same tolerance, while an unfillable minimum rolls back. Desk binding now checks the hook's code, Desk, token and game hash after the factory/registry proofs. Foreign-market, foreign-token, EOA and wrong-config tests fail with `InvalidProof`, then the honest registry binds. The matching-twin limitation remains accepted in `docs/m2-trust-assumption.md`.
+
+FeeRouter recomputes each sell's safe amount at execution from the actual queue and depth; it rejects an empty batch and enforces minOut against that amount. Caller dust cannot consume a cadence with a partial batch. FarmCore retirement requires the farmer. The regulator ignores encoded keys 0 and >45. Reward vintages retain the earlier credit timestamp. Lottery item claims create PackSale reward receipts, preserving future entropy and allowing claims with full inventory; capture/resolve and duplicate/failure paths are tested. Economy insertion rejects a 33rd traversal, with tests for the exact boundary, atomic rollback, list/accounting integrity and success after an earlier lock exits.
+
+**Constructors and gate.** `src/lib/Robinhood.sol` pins all eight supplied protocol endpoints for chain 4663. SwarmDesk has seven non-address words, EndowmentEscrow one Desk word, GameRegistry seven words without a factory argument, and V4Market seven words with `$poolManager`, `$token`, `$factory` retained as permitted platform placeholders. The factory is compiled into every registry proof, including the hook and escrow reconstruction. Modules retain their single registry argument. All 19 launch constructors are tested with no protocol code on the local chain. The Node gate checks every constructor in a launch document and rejects every supplied protocol address, including case variations, padded ABI words and decimal encoding. The default four-launch plan passes.
+
+**Four-launch handoff.** `launch-v39.md` contains complete L1–L4 objective texts, each under 8000 characters, with exact ordered constructor words, creation hashes, **NO SOURCE CHANGES**, and the eight accepted low/info lines copied verbatim from `docs/accepted-v314.md`. `docs/launch-v314-plan.json` is a source plan, not a platform manifest. L1 deploys Desk then escrow via `$contract:SwarmDesk`; L2 is token + hook, ETH-paired, poolBps 7000, remainder to that escrow; L3/L4 deploy job A/B using named intra-launch references. No new manifest, token source or dependency is introduced.
+
+GAME_CONFIG_HASH remains **0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3**. The roots and snapshot were already private runbook inputs; their placeholders retain that same approved preimage and must be checked against the unchanged hash before L3. Test-only fork roots never substitute for them. Oracle question/body inputs are unchanged.
+
+**Creation hashes.** Built under the unchanged foundry.toml: solc 0.8.26, optimizer 200, Cancun, viaIR false, bytecode_hash none. Both artifact directories agree. The changed module pins propagate through GameRegistry, SwarmDesk, EndowmentEscrow and the hook; the standalone flattened hook has identical creation bytes. Hashes below exclude constructor words; full initcode hashes depend on the recorded launch outputs.
+
+| Launch | Contract | Creation-code hash (without constructor words) | Runtime bytes |
+|---|---|---|---|
+| L1 | SwarmDesk | `0x2573ebbe036cbb372112a707611204bbc7f679484b83d99f387cb2dad0e1135e` | 21412 |
+| L1 | EndowmentEscrow | `0x8120758fa38683db9af5b5dbd28c6bd5682f58f160e36b1fc951815082101087` | 5008 |
+| L2 | V4Market | `0xb3a295abe415ce500a185349e2b831e67d06993d647b3831babacdfc96fb00d3` | 21259 |
+| L3 | Params | `0x26c9f36af040b02eba9644f52daeed84fae4e42eab9bdb23277d0bb28c6dc6c0` | 3118 |
+| L3 | GameRegistry | `0xb763989d9f8be8f545dd607d7bc7810001086e9e65bdf6fe9521e5ec9ddc5c88` | 2864 |
+| L3 | RewardPool | `0xecf3ae5ebb791318703b5e79960cfd243b7d89bdffa0e0501bee5146623764de` | 4234 |
+| L3 | FarmRewards | `0xf8f9f93e6bd8df85caaf5c508a71fb285a2f6229a5ef54023ac49ba66a14a001` | 16350 |
+| L3 | FarmCore | `0xd6b7d7555a5865832a6d352b2a0bfa96ea10857b076a4cc156d5ad78cd1044fa` | 22027 |
+| L3 | FarmItems | `0x98f7224201d9e7e3d16bd8996c29a522cac5bd1b375181de8cfdc2c6b9639e76` | 13861 |
+| L3 | PackSale | `0x7ecf36d55a73c01094e4434de085dfb39f17a1deda39a52ee38954f3a8e8737a` | 12538 |
+| L3 | StarterClaim | `0x960e2782608b572a1385ec22ed3e1fb49cd0cccd9b3455ce7bf7f22e990dbd90` | 5477 |
+| L4 | FeeRouter | `0x3b53c8d89f2836c0744007bac7e168e6c66dd19eaf4a74b2eadd5161ad12e6af` | 11750 |
+| L4 | GridOperator | `0xf21418187e35f2785dfd16075ad4b1bf855552ac4b413592f29d7222777974e9` | 9364 |
+| L4 | Season | `0xa79fdfbecdb2450bc94c1cedac7618b1f4244fe63c3f1bc6fea784f82cd42c83` | 11933 |
+| L4 | FarmEngine | `0x48a9f8dd8c707a2a8c6b4a1838640be765a3e3c9d2306680bda5ce679b6dbe7c` | 10783 |
+| L4 | Economy | `0x071421985d28e92da4caf5c8f17148d0cc9a8be8af66e7852d909d0a867b7e5d` | 10746 |
+| L4 | Enhancement | `0x19ff379fb18f8649bc3889c3f8981bcf40d7c4045fe066dde9014b55b9751689` | 6858 |
+| L4 | Civic | `0xb3e89ec00b8ad51904cdac336644a6025ceea25c15fa931cac2ad13d89dc0bb2` | 13019 |
+| L4 | Billboards | `0x3cb8b542f7baa025b6db7f2a4864288a594d05e75b9b4e9ec66416c1fe52aa60` | 6031 |
+
+**Checks.** Evidence is in `artifacts/v314/`: `forge build` passed; full `forge test` passed **286 tests / 0 failures / 6 skipped** in 50 suites, including the 128-run, depth-64 invariant campaign and 256-run fuzz tests. The six offline skips are the five rehearsal tests plus the optional RPC-only test. `forge fmt --check`, both pin checks, the authority check, deploy gate, and independent standalone flattened build all passed. Node: **9 test entries passed**, including the four new deploy-gate cases. Python: **34 tests passed**. Every launch runtime is below EIP-170. No Slither/Mythril or live oracle/schedule execution was performed.
+
+**Operational responsibilities.** The requester resolves the existing private roots/snapshot and prior launch output addresses, pays the four separate launch jobs and oracle schedules, and funds the keeper's gas. Keepers bind immediately after L3, register all modules, verify the bound registry before forwarding the escrow, activate the endowment, and advance the first epoch before packs are announced. Answers stored before L4 must wait for registration before execution. Lottery callers now receive a pack receipt and must capture/resolve it. Operators accept the precise eight findings in `docs/accepted-v314.md`; the runbook describes lock insertion limits and plain-transfer shortfall repair. The fixed oracle endpoints have no rotation authority. Test signer shims are confined to `test/` and never shipped as launch constructors or production substitutes.
+
+
+**Fork rehearsal passed.** `tools/rehearse_v311.sh https://robinhood.drpc.org artifacts/v314/rehearsal.log` completed **5 tests / 0 failures** on 2026-10-13 at RPC fork block **87523437**, basefee **20,148,000 wei (0.020148 gwei)**. It deployed L1 Desk + escrow atomically through the real ProjectFactory, L2 token + hook through LaunchFactory/PoolManager, and L3/L4 through ProjectFactory; then proved and registered the modules, bound the Desk/router, forwarded the entire endowment plus dust, funded the drip, exercised the oracle relay and epoch/entropy paths, tested launch taxes and system fees, and paid the platform fee share to the paying wallet. All transactions stayed on the local fork. The attester address stayed fixed in Desk bytecode/configuration; the test installed a signature-validating ERC1271 fixture there, and controlled native-L2 entropy, solely inside the fork.
+
+| Launch | Measured factory-call gas | Cost including 21,000 gas at fork basefee (ETH) |
+|---|---:|---:|
+| L1 Desk + escrow | 6,773,836 | 0.000136902355728 |
+| L2 token + hook | 7,096,407 | 0.000143401516236 |
+| L3 job A | 21,498,901 | 0.000433582965348 |
+| L4 job B | 19,711,879 | 0.000397578046092 |
+
+All four calls fit the 0.01 ETH ceiling at the observed basefee; the largest fits up to about **0.464686152 gwei**. This is a measured rehearsal estimate, not a launch-day gas guarantee. An earlier attempt found the rehearsal's obsolete five-entry loop and it was corrected to the four-launch array length. Two subsequent public-RPC attempts reported unavailable historical state; compiling before starting Anvil avoided snapshot aging during compilation, and the final complete run passed. Paid platform admission and the live signer/schedule services remain operational checks outside this source-only assignment.

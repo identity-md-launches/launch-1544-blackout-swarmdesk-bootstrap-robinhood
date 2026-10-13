@@ -60,8 +60,7 @@ contract ReviewV34Test is BaseTest {
                 keccak256(abi.encode(uint256(17), alice)),
                 freePackRoot(),
                 uint256(23_000_000),
-                uint256(0),
-                address(bindingFactory)
+                uint256(0)
             )
         );
         GameRegistry registry = GameRegistry(bindingFactory.deploy(registryLaunch, 1, registryCode));

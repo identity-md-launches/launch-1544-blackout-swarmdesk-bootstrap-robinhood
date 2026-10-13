@@ -372,8 +372,25 @@ contract SwarmDeskV37Test is BaseTest {
         assertEq(receivedBlock, 987654);
     }
 
+    function testRegulatorSkipsOutOfRangeKeysInsteadOfClampingToFortyFive() public {
+        vm.warp(vm.getBlockTimestamp() + 1 days);
+        uint256 last = d.params.get(Params.Key(44));
+        uint256 changed = d.params.lastChanged(Params.Key(44));
+        bytes32[] memory values = regulatorValues();
+        values[1] = bytes32((uint256(46) << 248) | type(uint248).max);
+        values[2] = bytes32((uint256(255) << 248) | type(uint248).max);
+        values[3] = bytes32(uint256(123)); // key zero is an explicit no-op
+        values[4] = bytes32((uint256(41) << 248) | uint256(220)); // valid HeartbeatBps
+        OracleAttestation.Attestation memory a = attestation(1, values);
+        receiveAnswer(a);
+        desk.execute(1, a.answer);
+        assertEq(d.params.get(Params.Key(44)), last);
+        assertEq(d.params.lastChanged(Params.Key(44)), changed);
+        assertEq(d.params.get(Params.Key.HeartbeatBps), 220);
+    }
+
     function testEmptyChainConstructorAndAuthenticatedBindingRejectSpoofs() public {
-        LocalApplicationFactory f = new LocalApplicationFactory();
+        LocalApplicationFactory f = LocalApplicationFactory(address(d.registry.factory()));
         SwarmDesk fresh;
         {
             SwarmDesk.BindingConfig memory b = desk.bindingConfig();
@@ -399,42 +416,43 @@ contract SwarmDeskV37Test is BaseTest {
         bytes memory pCode = type(Params).creationCode;
         bytes memory rCode = type(GameRegistry).creationCode;
         Params p =
-            Params(f.deploy(1, 0, bytes.concat(pCode, abi.encode(address(fresh), uint256(200), uint256(1 ether)))));
+            Params(f.deploy(51, 0, bytes.concat(pCode, abi.encode(address(fresh), uint256(200), uint256(1 ether)))));
         GameRegistry r = GameRegistry(
-            f.deploy(1, 1, bytes.concat(rCode, _registryArgs(address(p), d.registry.starterRoot(), address(f))))
+            f.deploy(51, 1, bytes.concat(rCode, _registryArgs(address(p), d.registry.starterRoot(), address(f))))
         );
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), hex"ff", pCode, 1, 1, 1, 0);
+        fresh.bind(address(r), hex"ff", pCode, 51, 1, 51, 0);
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), rCode, hex"ff", 1, 1, 1, 0);
+        fresh.bind(address(r), rCode, hex"ff", 51, 1, 51, 0);
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(d.registry), rCode, pCode, 1, 1, 1, 0);
+        fresh.bind(address(d.registry), rCode, pCode, 51, 1, 51, 0);
         {
             GameRegistry spoof = _lookalike(address(p), d.registry.starterRoot(), address(f));
             vm.expectRevert(InvalidProof.selector);
-            fresh.bind(address(spoof), rCode, pCode, 1, 1, 1, 0);
+            fresh.bind(address(spoof), rCode, pCode, 51, 1, 51, 0);
         }
         {
             GameRegistry wrongRoot = _lookalike(address(p), keccak256("wrong root"), address(f));
             vm.expectRevert(InvalidProof.selector);
-            fresh.bind(address(wrongRoot), rCode, pCode, 1, 1, 1, 0);
+            fresh.bind(address(wrongRoot), rCode, pCode, 51, 1, 51, 0);
         }
         // Correct proof at the wrong coordinates fails; zero coordinates are refused outright.
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), rCode, pCode, 2, 1, 1, 0);
+        fresh.bind(address(r), rCode, pCode, 52, 1, 51, 0);
         vm.expectRevert(InvalidProof.selector);
-        fresh.bind(address(r), rCode, pCode, 1, 1, 1, 1);
+        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 1);
         vm.expectRevert(InvalidValue.selector);
-        fresh.bind(address(r), rCode, pCode, 0, 1, 1, 0);
+        fresh.bind(address(r), rCode, pCode, 0, 1, 51, 0);
+        market.configureBinding(address(fresh), fresh.bindingConfig().gameConfigHash);
         vm.prank(bob);
-        fresh.bind(address(r), rCode, pCode, 1, 1, 1, 0);
+        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0);
         assertEq(address(fresh.registry()), address(r));
-        assertEq(fresh.bindingConfig().registryLaunch, 1);
+        assertEq(fresh.bindingConfig().registryLaunch, 51);
         assertEq(fresh.bindingConfig().paramsIndex, 0);
         vm.expectRevert(AlreadyDone.selector);
-        fresh.bind(address(r), rCode, pCode, 1, 1, 1, 0);
+        fresh.bind(address(r), rCode, pCode, 51, 1, 51, 0);
         vm.expectRevert(AlreadyDone.selector);
-        f.deploy(1, 1, bytes.concat(rCode, abi.encode("different initcode")));
+        f.deploy(51, 1, bytes.concat(rCode, abi.encode("different initcode")));
     }
 
     /// @dev Registry constructor arguments of the fixture game with a chosen starter root (keeps the bind tests
@@ -447,8 +465,7 @@ contract SwarmDeskV37Test is BaseTest {
             starterRoot,
             d.registry.freeRoot(),
             d.registry.snapshotBlock(),
-            d.registry.endowment(),
-            factory
+            d.registry.endowment()
         );
     }
 
@@ -481,17 +498,17 @@ contract SwarmDeskV37Test is BaseTest {
         b.paramsLaunch = 0;
         b.paramsIndex = 0;
         bytes memory args = SwarmArgs.encode(o, b);
-        assertEq(args.length, 12 * 32);
+        assertEq(args.length, 7 * 32);
         bytes memory code = vm.getCode("SwarmDesk.sol:SwarmDesk");
-        LocalApplicationFactory f = new LocalApplicationFactory();
-        // Word 5 is the packed policy word; bits 240-255 are reserved and must be zero.
+        LocalApplicationFactory f = LocalApplicationFactory(address(d.registry.factory()));
+        // Word 1 is the packed policy word; bits 240-255 are reserved and must be zero.
         uint256 badPolicy = SwarmArgs.policy(o, b) | (uint256(1) << 240);
-        assembly ("memory-safe") { mstore(add(args, 192), badPolicy) }
+        assembly ("memory-safe") { mstore(add(args, 64), badPolicy) }
         vm.expectRevert(InvalidValue.selector);
         f.deploy(5, 0, bytes.concat(code, args));
         args = SwarmArgs.encode(o, b);
         badPolicy = SwarmArgs.policy(o, b) | (uint256(1) << 255);
-        assembly ("memory-safe") { mstore(add(args, 192), badPolicy) }
+        assembly ("memory-safe") { mstore(add(args, 64), badPolicy) }
         vm.expectRevert(InvalidValue.selector);
         f.deploy(5, 0, bytes.concat(code, args));
         // The round trip of the packed word reproduces every configured value.

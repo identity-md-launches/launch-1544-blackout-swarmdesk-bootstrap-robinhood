@@ -158,7 +158,7 @@ contract V34Test is BaseTest {
     function testRemainderTransferredToPredictedPoolBeforeDeploymentAndNoApprovalNeeded() public {
         uint256 principal = 200_000_000 ether;
         MockGameRegistry r = mockRegistry(address(market), principal);
-        LocalApplicationFactory f = new LocalApplicationFactory();
+        LocalApplicationFactory f = LocalApplicationFactory(address(d.registry.factory()));
         bytes memory init = bytes.concat(type(RewardPool).creationCode, abi.encode(address(r)));
         address predicted = f.predictContract(30, 0, init);
         assertEq(predicted.code.length, 0);

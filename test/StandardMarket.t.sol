@@ -9,7 +9,7 @@ import {SwapParams} from "../src/interfaces/IV4.sol";
 
 contract TestStandardMarket is StandardMarket {
     constructor(address m, address t, address f, address k, bytes32 c)
-        StandardMarket(m, t, 12500, 60, msg.sender, f, k, c)
+        StandardMarket(m, t, 12500, 60, msg.sender, k, c)
     {}
     function _validateHookAddress() internal pure override {}
 

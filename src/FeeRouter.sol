@@ -201,7 +201,8 @@ contract FeeRouter is GameModule, ReentrancyGuard {
         ISystemMarket m = ISystemMarket(address(market()));
         uint256 total = teamTokens + heartbeatTokens;
         // A caller cannot consume the cadence with dust while a larger safe batch is queued.
-        if (amount == 0 || amount != Math.min(total, m.maxSellBatch())) revert InvalidValue();
+        amount = Math.min(total, m.maxSellBatch());
+        if (amount == 0) revert InvalidValue();
         uint256 quoted = m.quoteSell(amount);
         if (minOut == 0 || minOut < quoted * 9850 / 10000) revert InvalidValue();
         uint256 h = amount * heartbeatTokens / total;

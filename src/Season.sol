@@ -363,9 +363,6 @@ contract Season is GameModule, ReentrancyGuard {
         if (!lotteryWon[w][msg.sender] || lotteryClaimed[w][msg.sender]) revert InvalidValue();
         lotteryClaimed[w][msg.sender] = true;
         _payPot(w, msg.sender, pot[w] * 10 / 100);
-        bytes32 seed = keccak256(abi.encode(seasons[w].seed, msg.sender));
-        (uint8 k,) = ItemMath.draw(seed, false, false);
-        uint8 r = uint256(seed) % 100 < 90 ? 2 : 3;
-        id = items().mint(msg.sender, k, r, true);
+        id = packs().rewardPack(msg.sender);
     }
 }
