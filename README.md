@@ -1,4 +1,12 @@
-# BLACKOUT v3.8 (source v3.17)
+# BLACKOUT v3.8 (source v3.18)
+
+**v3.18 (L2 import audit a3749636, medium, fixed in source; L1 is deployed as launch 1628).** A buy whose
+`sqrtPriceLimitX96` stopped the swap early paid the launch tax and the 1% share on ETH the pool never consumed. V4Market
+now accepts buys only at the extreme bound `BUY_PRICE_LIMIT = 4295128740` (`PriceLimitedBuy` otherwise, what v4 routers
+send) and `afterSwap` refuses a partial fill (`PartialFill`); full-fill buys pay exactly as before and sells are
+unchanged. Only the V4Market creation hash changed; the other 18 are byte-identical to e17f0ef. The audit's low (tax
+taken from the PoolManager float in beforeSwap) is accepted. See `report.md` §v3.18, [launch-v39.md](launch-v39.md) and
+[docs/accepted-v318.md](docs/accepted-v318.md).
 
 **v3.17 (pre-token audit 339b6b19 and the launch-1593 farmDaily port, fixed in source).** `FarmRewards.lastFarmDaily`
 is a sticky basis: a higher settled yield replaces it at once, a lower one only decays it by 1/96 per settled epoch, and

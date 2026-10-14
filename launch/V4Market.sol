@@ -1364,6 +1364,12 @@ interface IHookRouter {
 /// rewards on every swap, plus the progressive sell surcharge on sells. The LaunchFactory initializes the
 /// pool, so afterInitialize authenticates its sender as `launcher` ($factory). No launch number is known at
 /// construction: the registry is proven at bind time. The hook has no owner.
+/// v3.18 (import audit a3749636, medium): a buy's launch tax and 1% share are an ETH charge on the specified
+/// input, which v4 only lets a hook set in beforeSwap, before the pool reports how much it consumed. A buy whose
+/// sqrtPriceLimitX96 stops the swap early would therefore pay tax on ETH the pool never took. Buys are accepted
+/// only at the extreme price bound (BUY_PRICE_LIMIT), where an exact-input swap consumes its whole input, and
+/// afterSwap additionally reverts unless the pool consumed exactly the taxed input, so no buyer ever pays
+/// tax on unconsumed ETH. Routers already send the extreme bound and protect the buyer with a minimum output.
 contract V4Market is ReentrancyGuard {
     using SafeERC20 for IERC20;
     bool private selling;
@@ -1371,6 +1377,14 @@ contract V4Market is ReentrancyGuard {
     uint256 public constant PROJECT_BPS = 100;
     /// @notice Hard cap of the hook's total sell charge (base plus progressive surcharge).
     uint256 public constant TOTAL_CAP_BPS = 1500;
+    /// @notice The only sqrtPriceLimitX96 a buy may carry: TickMath.MIN_SQRT_PRICE + 1 (v4-core), the extreme
+    /// bound an exact-input ETH -> token swap runs to, so the pool consumes the whole taxed input.
+    uint160 public constant BUY_PRICE_LIMIT = 4295128740;
+    /// @notice A buy carried a price limit other than BUY_PRICE_LIMIT; it could have stopped early and paid tax on
+    /// ETH the pool did not consume. Send the extreme bound and a minimum output instead.
+    error PriceLimitedBuy(uint160 sqrtPriceLimitX96);
+    /// @notice The pool consumed less than the taxed input of a buy (liquidity exhausted); the swap is refused.
+    error PartialFill(uint256 consumed, uint256 expected);
     uint160 public constant HOOK_FLAGS = 0x10cc; // afterInitialize, before/afterSwap and both swap deltas
     IV4PoolManager public immutable manager;
     address public immutable token;
@@ -1730,11 +1744,14 @@ contract V4Market is ReentrancyGuard {
         if (p.amountSpecified >= 0) revert InvalidValue();
         _observe(spot());
         if (!p.zeroForOne) return (this.beforeSwap.selector, 0, 0);
+        // v3.18: the charge below is on the specified input, so the swap must be one that consumes all of it.
+        if (p.sqrtPriceLimitX96 != BUY_PRICE_LIMIT) revert PriceLimitedBuy(p.sqrtPriceLimitX96);
         uint256 ethIn = uint256(-p.amountSpecified);
         uint256 taxBps = currentBuyTaxBps();
         uint256 fee = ethIn * taxBps / 10000;
         if (fee > uint256(uint128(type(int128).max))) revert InvalidValue();
         if (sinceLaunch() < LAUNCH_TAX_DECAY) {
+            // Taken from the manager's float before the swapper settles; accepted (docs/accepted-v318.md).
             manager.take(address(0), address(this), fee);
             heldLaunchTax += fee;
             emit LaunchTax(sender, ethIn, taxBps, fee);
@@ -1756,7 +1773,12 @@ contract V4Market is ReentrancyGuard {
         int128 ethDelta = int128(delta >> 128);
         if (p.zeroForOne) {
             if (ethDelta >= 0) revert InvalidValue();
-            _record(false, uint256(-int256(ethDelta)));
+            uint256 consumed = uint256(-int256(ethDelta));
+            // v3.18: beforeSwap taxed the whole specified input; the pool must have consumed all of the rest.
+            uint256 ethIn = uint256(-p.amountSpecified);
+            uint256 expected = ethIn - ethIn * currentBuyTaxBps() / 10000;
+            if (consumed != expected) revert PartialFill(consumed, expected);
+            _record(false, consumed);
             return (this.afterSwap.selector, 0);
         }
         if (ethDelta <= 0) revert InvalidValue();

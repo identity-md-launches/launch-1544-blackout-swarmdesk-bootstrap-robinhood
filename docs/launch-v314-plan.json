@@ -1,8 +1,8 @@
 {
-  "version": "3.17",
+  "version": "3.18",
   "chainId": 4663,
   "gameConfigHash": "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3",
-  "note": "Source launch plan, not an IMD manifest. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records. v3.17 ports the sticky farmDaily basis (FarmRewards) and fixes pre-token audit 339b6b19 (Enhancement lapse, GridOperator re-arm, Economy.unlock liveness, destroyed-item weight), so nine of the 19 creation hashes changed: SwarmDesk, EndowmentEscrow, V4Market and GameRegistry (regenerated SwarmCode/ModuleCode pins), FarmRewards, FarmCore, GridOperator, Economy and Enhancement. Params, RewardPool, FarmItems, PackSale, StarterClaim, FeeRouter, Season, FarmEngine, Civic and Billboards are byte-identical to v3.16. Constructor words are unchanged; the Desk's eighth word is still the binder 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007 (project wallet, not an IMD protocol address).",
+  "note": "Source launch plan, not an IMD manifest. L1 is deployed as launch 1628 (SwarmDesk 0x5cb0686a4475d1f8a6c6e5240579080a4a05b609, EndowmentEscrow 0x11947494c0ba91508eb7409648193818c36521fb); its objective is kept for the record and the L2 entry carries those addresses literally. Angle-bracket inputs retain the approved private roots/snapshot or resolve from earlier launch records. v3.18 fixes L2 import-audit a3749636 (medium) in src/V4Market.sol only: buys must carry the extreme sqrtPriceLimitX96 4295128740 (PriceLimitedBuy otherwise) and afterSwap refuses a partial fill (PartialFill), so the launch tax and the 1% share are never charged on ETH the pool did not consume. Only the V4Market creation hash changed; the other 18 are byte-identical to e17f0ef (v3.17). Constructor words are unchanged; the Desk's eighth word is still the binder 0x6d51cBE774aeAe4dd40bCA2560E9bc2695A0d007 (project wallet, not an IMD protocol address).",
   "launches": [
     {
       "id": "L1",
@@ -29,7 +29,12 @@
           ],
           "creationHash": "0xe7a48446223ad53d50a9a9372c5552b70fb94e4f03c0f9f45298f7e5d2036368"
         }
-      ]
+      ],
+      "deployed": {
+        "launchNumber": 1628,
+        "SwarmDesk": "0x5cb0686a4475d1f8a6c6e5240579080a4a05b609",
+        "EndowmentEscrow": "0x11947494c0ba91508eb7409648193818c36521fb"
+      }
     },
     {
       "id": "L2",
@@ -37,7 +42,7 @@
       "pairWith": "eth",
       "economics": {
         "poolBps": 7000,
-        "remainderTo": "<L1_ENDOWMENT_ESCROW>"
+        "remainderTo": "0x11947494c0ba91508eb7409648193818c36521fb"
       },
       "contracts": [
         {
@@ -48,10 +53,10 @@
             "12500",
             "60",
             "$factory",
-            "<L1_SWARM_DESK>",
+            "0x5cb0686a4475d1f8a6c6e5240579080a4a05b609",
             "0x11ed7438974e96ecc962201e9c46422c7bf239d725876863fa25a56c734b20d3"
           ],
-          "creationHash": "0x17e05386811fe526f0f44b95338a881b74127920e0f0587dbd1f798028b09931"
+          "creationHash": "0x8d6e02398e351aa4c28486a92d7ec60baf7edc67ccaaa88eed4bd61e9b9092a4"
         }
       ]
     },

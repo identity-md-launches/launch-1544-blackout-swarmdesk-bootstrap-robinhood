@@ -97,8 +97,10 @@ contract V39Test is BaseTest {
         SwapParams memory buy = SwapParams(true, -int256(3 ether), 4295128740);
         (, int256 delta,) = manager.invokeBefore(hook, buy);
         assertEq(uint256(delta >> 128), 0.03 ether);
-        // Record the buy volume as the pool would after the swap.
-        manager.invokeAfter(hook, buy, (int256(-int128(int256(3 ether))) << 128) | int256(uint256(uint128(3 ether))));
+        // Record the buy volume as the pool would after the swap: it consumed the input net of the hook's 1%.
+        manager.invokeAfter(
+            hook, buy, (int256(-int128(int256(2.97 ether))) << 128) | int256(uint256(uint128(2.97 ether)))
+        );
         assertEq(hook.heldBase(), 0.03 ether);
         assertEq(hook.heldSellTax(), 0);
         assertEq(hook.heldLaunchTax(), 0);
